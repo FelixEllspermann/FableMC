@@ -143,8 +143,8 @@ export class Fluids {
         const nid = w.getBlock(x + dx, y + dy, z + dz);
         if (enemy(nid)) {
           if (isWater) {
-            // Lava-Zelle wird zu Stein/Bruchstein
-            w.setBlock(x + dx, y + dy, z + dz, nid === BLOCK.LAVA ? BLOCK.STONE : BLOCK.COBBLESTONE);
+            // Wasser auf Lava-Quelle → Obsidian, auf fließende Lava → Bruchstein
+            w.setBlock(x + dx, y + dy, z + dz, nid === BLOCK.LAVA ? BLOCK.OBSIDIAN : BLOCK.COBBLESTONE);
           } else {
             // Lava-Zelle selbst verfestigt
             w.setBlock(x, y, z, isSource ? BLOCK.STONE : BLOCK.COBBLESTONE);

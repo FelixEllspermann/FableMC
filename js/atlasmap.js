@@ -1,7 +1,7 @@
 // Atlas-Layout ohne Abhängigkeiten (nutzbar im Worker): Kachelnamen + UV-Rechtecke.
 
 export const TILE_PX = 16;
-export const ATLAS_COLS = 16; // 16×16 Kacheln = 256 Plätze
+export const ATLAS_COLS = 20; // 20×20 Kacheln = 400 Plätze (Reserve)
 
 export const TILE_NAMES = [
   'grass_top', 'grass_side', 'dirt', 'stone', 'cobblestone', 'log_top', 'log_side', 'planks',
@@ -64,6 +64,8 @@ export const TILE_NAMES = [
   'berry_red', 'berry_blue', 'berry_yellow',
   'dark_grass_top', 'dark_grass_side', 'mushroom_red', 'mushroom_brown',
   'leafy_grass_top', 'leafy_grass_side',
+  'leather', 'paper', 'book', 'spell_core',
+  'obsidian', 'bookshelf', 'ench_table_top', 'ench_table_side',
 ];
 
 const cache = new Map();

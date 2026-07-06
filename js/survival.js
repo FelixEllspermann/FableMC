@@ -154,6 +154,9 @@ export class Survival {
         const p = armor[k];
         if (p) def += (ITEMS[p.id]?.armor?.defense || 0) + equipStats(p).defense;
       }
+      // Rucksack mit Schutz-Verzauberung zählt ebenfalls zur Verteidigung
+      const pack = this.ctx.inventory?.backpack;
+      if (pack) def += equipStats(pack).defense;
       if (def > 0) amount = Math.max(0.5, amount * (1 - Math.min(0.8, def * 0.04)));
       for (const k of ARMOR_SLOTS) {
         const p = armor[k];

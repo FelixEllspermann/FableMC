@@ -3,6 +3,7 @@
 //   { id, count: 1, slots, upgrades: [itemIds], used }
 
 import { BLOCK, ITEM, ITEMS, nameOf } from './constants.js';
+import { ENCHANTS, romanLevel } from './enchant.js';
 
 // Slot-Chance pro verbautem Material (jede Zutat würfelt einen potenziellen Slot)
 export const SLOT_CHANCE = {
@@ -63,7 +64,15 @@ export function equipStats(stack) {
     harvestBonus: 0, defense: 0, thorns: 0, eff: 1,
     reach: 0, airBonus: 0, kbImmune: false, stepHeight: 0, fallBonus: 0,
   };
-  if (!stack || !isEquipment(stack.id)) return out;
+  if (!stack) return out;
+  // Verzauberungs-Boni (gelten auch für den Rucksack, der kein „isEquipment" ist)
+  const ench = stack.ench;
+  if (ench) {
+    if (ench.efficiency) out.speedBonus += ench.efficiency * 0.4; // Effizienz: schneller abbauen
+    if (ench.sharpness) out.dmgAll += ench.sharpness * 1.0;       // Schärfe: mehr Schaden
+    if (ench.protection) out.defense += ench.protection * 1.0;    // Schutz: mehr Rüstung
+  }
+  if (!isEquipment(stack.id)) return out;
   const kind = equipKind(stack.id);
   const ups = stack.upgrades || [];
   const sugar = ups.filter((u) => u === ITEM.SUGAR).length;
@@ -123,6 +132,9 @@ export function durabilityLeft(stack) {
 
 // true → Item ist zerbrochen
 export function damageItem(stack, amount = 1) {
+  // Unzerbrechlich: Chance level/(level+1), KEINE Haltbarkeit zu verlieren
+  const unb = stack.ench?.unbreakable || 0;
+  if (unb > 0 && Math.random() < unb / (unb + 1)) return stack.used >= maxDurability(stack);
   stack.used = (stack.used || 0) + amount;
   return stack.used >= maxDurability(stack);
 }
@@ -154,6 +166,12 @@ export function meleeDamageFor(stack, isAnimal) {
 export function tooltipFor(stack) {
   if (!stack) return '';
   let t = nameOf(stack.id);
+  if (stack.ench) {
+    for (const key in stack.ench) {
+      const e = ENCHANTS[key];
+      if (e) t += `\n✦ ${e.name} ${romanLevel(stack.ench[key])}`;
+    }
+  }
   if (!isEquipment(stack.id)) return t;
   const d = ITEMS[stack.id];
   const s = equipStats(stack);

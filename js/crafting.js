@@ -104,6 +104,18 @@ export const RECIPES = [
   }
 }
 
+// Verzauberungs-Kette: Papier (Zuckerrohr-Spalte), Buch, Bücherregal, Verzauberungstisch
+{
+  const SC = BLOCK.SUGAR_CANE, PA = ITEM.PAPER, BK = ITEM.BOOK, LE = ITEM.LEATHER;
+  const DI = ITEM.DIAMOND, OB = BLOCK.OBSIDIAN, SPC = ITEM.SPELL_CORE;
+  RECIPES.push(
+    { pattern: [[SC], [SC], [SC]], result: { id: PA, count: 3 } },
+    { shapeless: [PA, PA, PA, LE], result: { id: BK, count: 1 } },
+    { pattern: [[P, P, P], [BK, BK, BK], [P, P, P]], result: { id: BLOCK.BOOKSHELF, count: 1 } },
+    { pattern: [[0, BK, 0], [DI, SPC, DI], [OB, OB, OB]], result: { id: BLOCK.ENCHANTING_TABLE, count: 1 } }
+  );
+}
+
 // Werkzeug-, Waffen- und Rüstungsrezepte für Eisen/Gold/Diamant (programmatisch)
 {
   const MATS = [

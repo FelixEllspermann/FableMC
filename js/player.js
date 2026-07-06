@@ -717,6 +717,11 @@ export class Player {
       this.rightHeld = false;
       return;
     }
+    if (t && t.id === BLOCK.ENCHANTING_TABLE && !this.held('sneak')) {
+      this.ctx.inventory.open('enchant');
+      this.rightHeld = false;
+      return;
+    }
     if (t && (t.id === BLOCK.FURNACE || t.id === BLOCK.FURNACE_ON) && !this.held('sneak')) {
       this.ctx.inventory.open('furnace', { x: t.x, y: t.y, z: t.z });
       this.rightHeld = false;

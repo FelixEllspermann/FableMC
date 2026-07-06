@@ -15,7 +15,7 @@ import { getIconDataURL } from './textures.js';
 
 // Anzeigenamen der Mobs fürs Fadenkreuz-Fenster
 const MOB_NAMES = {
-  pig: 'Schwein', sheep: 'Schaf', chicken: 'Huhn', fish: 'Fisch',
+  pig: 'Schwein', cow: 'Kuh', sheep: 'Schaf', chicken: 'Huhn', fish: 'Fisch',
   zombie: 'Zombie', skeleton: 'Skelett', creeper: 'Creeper',
   crimson_zombie: 'Blutroter Zombie', slime: 'Schleim', villager: 'Dorfbewohner',
 };

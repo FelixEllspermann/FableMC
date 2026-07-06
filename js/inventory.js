@@ -4,11 +4,13 @@ import { nameOf, stackSizeOf, BLOCKS, ITEMS, ITEM, BLOCK, SMELT, FUEL } from './
 import { getIconDataURL } from './textures.js';
 import { matchGrid } from './crafting.js';
 import { Keybinds } from './keybinds.js';
+import { rollOptions, canEnchant, ENCHANTS, RARITY_NAME, romanLevel } from './enchant.js';
 import {
   isEquipment, equipKind, makeInstance, tooltipFor, durabilityLeft, maxDurability, UPGRADE_IDS,
 } from './equip.js';
 
-const BACKPACK_SIZE = 27; // gleich groß wie das Haupt-Inventar (3×9)
+const BACKPACK_SIZE = 27; // Grundgröße (3×9); Stauraum-Verzauberung gibt +9 (1 Reihe) pro Level
+const bagSize = (bp) => BACKPACK_SIZE + ((bp && bp.ench && bp.ench.space) || 0) * 9;
 
 // Amboss-Arbeit kostet XP-Level (nur im Überleben; Kreativ ist gratis).
 const AMBOSS_KOSTEN_SOCKEL = 4;  // Sockel-Rune einsetzen (+1 Upgrade-Slot)
@@ -47,6 +49,15 @@ const STYLE = `
 .inv-anvil-ups .inv-slot.leer { opacity: 0.55; }
 .inv-anvil-hint { font-size: 12px; color: #3f3f3f; line-height: 1.35; margin-left: 4px; }
 .inv-anvil-hint b { color: #1f7d0e; }
+.inv-ench-opts { display: flex; flex-direction: column; gap: 6px; margin: 0 10px; min-width: 250px; }
+.inv-ench-opt {
+  padding: 6px 10px; background: #5b5168; color: #fff; cursor: pointer;
+  border: 2px solid; border-color: #8a7ea0 #2f2a3a #2f2a3a #8a7ea0;
+}
+.inv-ench-opt:hover:not(.disabled) { background: #6f6086; }
+.inv-ench-opt.disabled { opacity: 0.5; cursor: default; }
+.inv-ench-name { font-size: 14px; color: #ecdcff; }
+.inv-ench-cost { font-size: 11.5px; color: #d6cfe8; }
 .inv-clear-btn {
   font-size: 13px; padding: 6px 10px; background: #8a5f5f; color: #fff;
   border: 2px solid; border-color: #b08a8a #4a3232 #4a3232 #b08a8a;
@@ -126,6 +137,8 @@ export class Inventory {
     this.armor = { helmet: null, chest: null, legs: null, boots: null };
     this.backpack = null;        // ausgerüsteter Rucksack (Item-Stack mit .bag = eigenes Inventar)
     this.anvilItem = null;       // Ausrüstung, die gerade im Amboss liegt
+    this.enchantItem = null;     // Item im Verzauberungstisch
+    this._enchOpts = null;       // die 3 ausgewürfelten Optionen
     this.furnace = { input: null, fuel: null, output: null, progress: 0, fuelLeft: 0 };
 
     const style = document.createElement('style');
@@ -332,8 +345,9 @@ export class Inventory {
 
   open(mode = false, pos = null) {
     if (this._open) return;
-    this.mode = ['anvil', 'furnace', 'chest', 'brewing', 'washer', 'trade', 'backpack'].includes(mode)
+    this.mode = ['anvil', 'enchant', 'furnace', 'chest', 'brewing', 'washer', 'trade', 'backpack'].includes(mode)
       ? mode : mode ? 'table' : 'basic';
+    if (this.mode === 'enchant') { this.enchantItem = null; this._enchOpts = null; }
     // Rucksack: an den ausgerüsteten Rucksack binden (Inhalt lazy anlegen)
     if (this.mode === 'backpack') {
       if (!this.backpack) this.mode = 'basic';
@@ -389,6 +403,7 @@ export class Inventory {
     this.craft = [];
     if (this.cursor) { this._returnStack(this.cursor); this.cursor = null; }
     if (this.anvilItem) { this._returnStack(this.anvilItem); this.anvilItem = null; }
+    if (this.enchantItem) { this._returnStack(this.enchantItem); this.enchantItem = null; }
     // Ofen-Inhalt bleibt im Block — er schmilzt im Hintergrund weiter
     this.result = null;
     this._open = false;
@@ -641,6 +656,41 @@ export class Inventory {
     return true;
   }
 
+  // Verzauberung bezahlen: XP-Level + je 10 Level entweder 10 Smaragde ODER 1 Saphir.
+  // Erst Smaragde (10/Einheit), dann Saphire (1/Einheit). Kreativ ist gratis.
+  _zahleVerzauberung(cost) {
+    if (this.ctx.state.mode !== 'survival') return true;
+    const xp = this.ctx.experience;
+    const units = Math.ceil(cost / 10);
+    const em = this.countItem(ITEM.EMERALD), sa = this.countItem(ITEM.SAPPHIRE);
+    if (!xp || !xp.canAfford(cost)) {
+      this.ctx.ui.toast(`Nicht genug XP: ${cost} Level nötig`); this.ctx.sounds.denied?.(); return false;
+    }
+    if (Math.floor(em / 10) + sa < units) {
+      this.ctx.ui.toast(`Nicht genug Edelsteine: ${units * 10} Smaragde oder ${units} Saphir`);
+      this.ctx.sounds.denied?.(); return false;
+    }
+    xp.spendLevels(cost);
+    const emUnits = Math.min(units, Math.floor(em / 10));
+    if (emUnits > 0) this.removeItems(ITEM.EMERALD, emUnits * 10);
+    if (units - emUnits > 0) this.removeItems(ITEM.SAPPHIRE, units - emUnits);
+    return true;
+  }
+
+  // Eine gewählte Option auf das eingelegte Item anwenden (nur aufwerten, nie herabstufen)
+  _applyEnchant(opt) {
+    const item = this.enchantItem;
+    if (!item || !opt.ench) return;
+    if (!this._zahleVerzauberung(opt.cost)) return;
+    item.ench = item.ench || {};
+    item.ench[opt.ench.key] = Math.max(item.ench[opt.ench.key] || 0, opt.ench.level);
+    this.ctx.sounds.pickup?.();
+    this.ctx.ui.toast(`${ENCHANTS[opt.ench.key].name} ${romanLevel(opt.ench.level)} verzaubert!`);
+    this._enchOpts = rollOptions(item.id); // neu würfeln für die nächste Verzauberung
+    this._renderPanel();
+    this._renderHotbar();
+  }
+
   _renderPanel() {
     if (!this._open) return;
     this.overlayEl.textContent = '';
@@ -649,7 +699,8 @@ export class Inventory {
     panel.addEventListener('mousedown', (e) => e.stopPropagation());
 
     const h = document.createElement('h3');
-    h.textContent = this.mode === 'anvil' ? 'Amboss' : this.mode === 'furnace' ? 'Ofen'
+    h.textContent = this.mode === 'anvil' ? 'Amboss' : this.mode === 'enchant' ? 'Verzauberungstisch'
+      : this.mode === 'furnace' ? 'Ofen'
       : this.mode === 'chest' ? 'Truhe' : this.mode === 'brewing' ? 'Braustand'
       : this.mode === 'washer' ? 'Washer' : this.mode === 'trade' ? 'Handel'
       : this.mode === 'backpack' ? 'Rucksack' : 'Handwerk';
@@ -766,6 +817,53 @@ export class Inventory {
         hint.innerHTML = `Kosten: Sockel <b>${AMBOSS_KOSTEN_SOCKEL}</b> · Aufwerten <b>${AMBOSS_KOSTEN_UPGRADE}</b> Lvl<br>du hast <b>${lvl}</b> Level`;
         craftRow.appendChild(hint);
       }
+    } else if (this.mode === 'enchant') {
+      // Verzauberungstisch: Item einlegen, dann 1 von 3 Optionen wählen
+      craftRow.appendChild(this._slotEl(this.enchantItem, () => {
+        const cur = this.cursor;
+        if (cur) {
+          if (!canEnchant(cur.id)) return;
+          const alt = this.enchantItem;
+          this.enchantItem = cur; this.cursor = alt || null;
+        } else if (this.enchantItem) {
+          this.cursor = this.enchantItem; this.enchantItem = null;
+        }
+        this._enchOpts = this.enchantItem ? rollOptions(this.enchantItem.id) : null;
+        this._renderPanel();
+      }, this.enchantItem ? '' : 'leer'));
+
+      const box = document.createElement('div');
+      box.className = 'inv-ench-opts';
+      const creative = this.ctx.state.mode !== 'survival';
+      const lvl = this.ctx.experience?.level ?? 0;
+      const em = this.countItem(ITEM.EMERALD), sa = this.countItem(ITEM.SAPPHIRE);
+      if (!this.enchantItem) {
+        const h0 = document.createElement('div'); h0.className = 'inv-anvil-hint';
+        h0.textContent = 'Lege ein Werkzeug, eine Waffe, Rüstung oder einen Rucksack ein.';
+        box.appendChild(h0);
+      }
+      (this._enchOpts || []).forEach((opt) => {
+        const units = Math.ceil(opt.cost / 10);
+        const affordX = creative || lvl >= opt.cost;
+        const affordG = creative || Math.floor(em / 10) + sa >= units;
+        const usable = !!opt.ench && affordX && affordG;
+        const row = document.createElement('div');
+        row.className = 'inv-ench-opt' + (usable ? '' : ' disabled');
+        const name = opt.ench ? `${ENCHANTS[opt.ench.key].name} ${romanLevel(opt.ench.level)}` : 'keine passende';
+        const nameEl = document.createElement('div'); nameEl.className = 'inv-ench-name';
+        nameEl.textContent = `${RARITY_NAME[opt.rarity]} — ${name}`;
+        const costEl = document.createElement('div'); costEl.className = 'inv-ench-cost';
+        costEl.textContent = `${opt.cost} Level · ${units * 10} Smaragde oder ${units} Saphir`;
+        row.appendChild(nameEl); row.appendChild(costEl);
+        if (usable) row.addEventListener('mousedown', (e) => { e.stopPropagation(); this._applyEnchant(opt); });
+        box.appendChild(row);
+      });
+      craftRow.appendChild(box);
+      if (this.ctx.state.mode === 'survival') {
+        const hint = document.createElement('div'); hint.className = 'inv-anvil-hint';
+        hint.innerHTML = `Du hast <b>${lvl}</b> Level · <b>${em}</b> Smaragde · <b>${sa}</b> Saphire`;
+        craftRow.appendChild(hint);
+      }
     } else if (this.mode === 'chest') {
       // Truhe: 27 freie Slots (3×9)
       const grid = document.createElement('div');
@@ -784,12 +882,14 @@ export class Inventory {
       }
       craftRow.appendChild(grid);
     } else if (this.mode === 'backpack') {
-      // Rucksack: 27 freie Slots, gebunden an den Inhalt des ausgerüsteten Rucksacks
+      // Rucksack: Slots gebunden an den Inhalt; Stauraum-Verzauberung gibt mehr Reihen
+      const size = bagSize(this.backpack);
       const bag = this.backpack?.bag || [];
+      while (bag.length < size) bag.push(null);
       const grid = document.createElement('div');
       grid.className = 'inv-grid';
       grid.style.gridTemplateColumns = 'repeat(9, 44px)';
-      for (let i = 0; i < BACKPACK_SIZE; i++) {
+      for (let i = 0; i < size; i++) {
         const idx = i;
         grid.appendChild(this._slotEl(bag[idx], (btn) => {
           this._clickCell(() => bag[idx], (v) => { bag[idx] = v; }, btn, false);

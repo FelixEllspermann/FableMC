@@ -28,12 +28,12 @@ const FISH_CAP = 8;
 
 // Weidetiere je Biom — nur in Biomen, in denen sie Sinn ergeben (kein Wüsten-/Ozean-/Berg-Spawn)
 const LAND_ANIMALS = {
-  ebene: ['pig', 'sheep', 'chicken'],
-  blumenwiese: ['pig', 'sheep', 'chicken'],
-  wald: ['pig', 'sheep', 'chicken'],
-  birkenwald: ['pig', 'sheep', 'chicken'],
-  savanne: ['pig', 'sheep', 'chicken'],
-  tannenwald: ['pig', 'sheep', 'chicken'],
+  ebene: ['pig', 'cow', 'sheep', 'chicken'],
+  blumenwiese: ['pig', 'cow', 'sheep', 'chicken'],
+  wald: ['pig', 'cow', 'sheep', 'chicken'],
+  birkenwald: ['pig', 'cow', 'sheep', 'chicken'],
+  savanne: ['pig', 'cow', 'sheep', 'chicken'],
+  tannenwald: ['pig', 'cow', 'sheep', 'chicken'],
   gebirgsfuss: ['pig', 'sheep'],
   dschungel: ['pig', 'chicken'],       // Dschungel: Schweine & Hühner (typische Dschungeltiere)
   schneelandschaft: ['sheep'],          // Schnee: nur Schafe (Wolle passt zur Kälte)
@@ -155,6 +155,7 @@ export class EntityManager {
     const built =
       type === 'pig' ? this._makePig() :
       type === 'sheep' ? this._makeSheep() :
+      type === 'cow' ? this._makeCow() :
       type === 'chicken' ? this._makeChicken() :
       type === 'villager' ? this._makeVillager() :
       type === 'fish' ? this._makeFish() :
@@ -228,6 +229,26 @@ export class EntityManager {
       g.add(leg);
     }
     return { group: g, legs, arms: [], materials: [wool, skin, dark], woolParts: [woolBody, woolCap] };
+  }
+
+  _makeCow() {
+    const hide = new THREE.MeshLambertMaterial({ color: 0x4a3526 });   // braunes Fell
+    const patch = new THREE.MeshLambertMaterial({ color: 0xe8e2d4 });  // weiße Flecken
+    const snout = new THREE.MeshLambertMaterial({ color: 0xd8a898 });
+    const horn = new THREE.MeshLambertMaterial({ color: 0xcfc6b0 });
+    const g = new THREE.Group();
+    g.add(box(0.72, 0.66, 1.1, hide, 0, 0.86, 0));            // Körper
+    g.add(box(0.74, 0.3, 0.5, patch, 0, 0.9, 0.06));         // weißer Fleck
+    g.add(box(0.44, 0.44, 0.42, hide, 0, 1.06, 0.72));       // Kopf
+    g.add(box(0.34, 0.26, 0.12, snout, 0, 0.98, 0.94));      // Schnauze
+    g.add(box(0.1, 0.16, 0.1, horn, -0.16, 1.32, 0.7));      // Hörner
+    g.add(box(0.1, 0.16, 0.1, horn, 0.16, 1.32, 0.7));
+    const legs = [];
+    for (const [lx, lz] of [[-0.22, 0.36], [0.22, 0.36], [-0.22, -0.36], [0.22, -0.36]]) {
+      const leg = box(0.18, 0.56, 0.18, hide, lx, 0.56, lz, true);
+      legs.push(leg); g.add(leg);
+    }
+    return { group: g, legs, arms: [], materials: [hide, patch, snout, horn] };
   }
 
   _makeChicken() {
@@ -414,6 +435,7 @@ export class EntityManager {
     const built =
       type === 'pig' ? this._makePig() :
       type === 'sheep' ? this._makeSheep() :
+      type === 'cow' ? this._makeCow() :
       type === 'chicken' ? this._makeChicken() :
       type === 'villager' ? this._makeVillager() :
       type === 'fish' ? this._makeFish() :
@@ -422,8 +444,8 @@ export class EntityManager {
       type === 'crimson_zombie' ? this._makeCrimsonZombie() :
       type === 'slime' ? this._makeSlime() : this._makeZombie();
     const scale = opts.scale ?? 1;
-    const baseW = type === 'pig' ? 0.8 : type === 'sheep' ? 0.85 : type === 'chicken' ? 0.4 : type === 'fish' ? 0.3 : type === 'crimson_zombie' ? 0.7 : type === 'slime' ? 0.9 : type === 'villager' ? 0.55 : 0.6;
-    const baseH = type === 'pig' ? 1.0 : type === 'sheep' ? 1.2 : type === 'chicken' ? 0.7 : type === 'fish' ? 0.3 : type === 'creeper' ? 1.85 : type === 'crimson_zombie' ? 1.95 : type === 'slime' ? 0.9 : 1.9;
+    const baseW = type === 'pig' ? 0.8 : type === 'sheep' ? 0.85 : type === 'cow' ? 0.95 : type === 'chicken' ? 0.4 : type === 'fish' ? 0.3 : type === 'crimson_zombie' ? 0.7 : type === 'slime' ? 0.9 : type === 'villager' ? 0.55 : 0.6;
+    const baseH = type === 'pig' ? 1.0 : type === 'sheep' ? 1.2 : type === 'cow' ? 1.35 : type === 'chicken' ? 0.7 : type === 'fish' ? 0.3 : type === 'creeper' ? 1.85 : type === 'crimson_zombie' ? 1.95 : type === 'slime' ? 0.9 : 1.9;
     const e = {
       type,
       pos: new THREE.Vector3(x + 0.5, y, z + 0.5),
@@ -431,7 +453,7 @@ export class EntityManager {
       width: baseW * scale,
       height: baseH * scale,
       onGround: false, inWater: false, fallDistance: 0,
-      health: opts.hp ?? (type === 'pig' ? 10 : type === 'sheep' ? 8 : type === 'chicken' ? 4 : type === 'fish' ? 3 : type === 'slime' ? 12 : 20),
+      health: opts.hp ?? (type === 'pig' ? 10 : type === 'sheep' ? 8 : type === 'cow' ? 10 : type === 'chicken' ? 4 : type === 'fish' ? 3 : type === 'slime' ? 12 : 20),
       home: opts.home || null, // Dorfbewohner: Leine ans Dorfzentrum
       tail: built.tail || null, swimTimer: 0,
       mesh: built.group, legs: built.legs, arms: built.arms, materials: built.materials,
@@ -505,7 +527,7 @@ export class EntityManager {
     const it = ITEMS[id];
     if (type === 'pig') return it?.food != null;
     if (type === 'chicken') return it?.plant != null && it?.food == null;
-    if (type === 'sheep') return id === ITEM.WHEAT;
+    if (type === 'sheep' || type === 'cow') return id === ITEM.WHEAT;
     return false;
   }
 
@@ -1009,7 +1031,7 @@ export class EntityManager {
     const tiere = LAND_ANIMALS[biomeAt(this.ctx.seed, x, z)];
     if (!tiere) return; // Wüste, Ödland, Berge, Pilzinsel …: keine Weidetiere
     const type = tiere[Math.floor(Math.random() * tiere.length)];
-    const cap = (type === 'pig' ? PIG_CAP : type === 'sheep' ? SHEEP_CAP : CHICKEN_CAP) * capScale;
+    const cap = (type === 'pig' ? PIG_CAP : type === 'sheep' || type === 'cow' ? SHEEP_CAP : CHICKEN_CAP) * capScale;
     if (this._countType(type) >= cap) return;
     this._spawnMob(type, x, y + 1, z);
   }
@@ -1461,6 +1483,9 @@ export class EntityManager {
       const n = 1 + Math.floor(Math.random() * 2);
       this._dropShared(e.pos.x, e.pos.y + 0.5, e.pos.z, ITEM.MUTTON, n);
       if (e.hasWool) this._dropShared(e.pos.x, e.pos.y + 0.5, e.pos.z, BLOCK.WOOL, 1);
+    } else if (e.type === 'cow') {
+      const n = 1 + Math.floor(Math.random() * 2); // 1–2 Leder
+      this._dropShared(e.pos.x, e.pos.y + 0.5, e.pos.z, ITEM.LEATHER, n);
     } else if (e.type === 'chicken') {
       this._dropShared(e.pos.x, e.pos.y + 0.3, e.pos.z, ITEM.RAW_CHICKEN, 1);
       const f = Math.floor(Math.random() * 3); // 0–2 Federn

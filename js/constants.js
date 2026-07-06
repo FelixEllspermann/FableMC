@@ -179,6 +179,9 @@ export const BLOCK = {
   MUSHROOM_RED: 221,      // kleiner roter Bodenpilz (Kreuz-Sprite)
   MUSHROOM_BROWN: 222,    // kleiner brauner Bodenpilz
   LEAFY_GRASS: 223,       // laubbedecktes Gras (Spruce Valley)
+  OBSIDIAN: 224,          // Wasser auf Lava-Quelle → Obsidian (nur mit Diamantspitzhacke)
+  BOOKSHELF: 225,         // Bretter + Bücher
+  ENCHANTING_TABLE: 226,  // 2 Diamant + 1 Buch + 3 Obsidian + 1 Spell Core
 };
 
 // blocks mobs may spawn on / that count as "grass-like" ground
@@ -249,6 +252,10 @@ export const ITEM = {
   BERRY_RED: 1091,      // Beeren (essbar) — von Beerenbüschen
   BERRY_BLUE: 1092,
   BERRY_YELLOW: 1093,
+  LEATHER: 1094,        // von Kühen — für Bücher
+  PAPER: 1095,          // aus 3 Zuckerrohr
+  BOOK: 1096,           // Leder + Papier
+  SPELL_CORE: 1097,     // sehr selten in Magier-Türmen — für den Verzauberungstisch
 };
 
 // Ofen: was lässt sich schmelzen, was taugt als Brennstoff (Anzahl Schmelzvorgänge)
@@ -697,6 +704,17 @@ BLOCKS[BLOCK.DARK_GRASS] = { name: 'Dunkler Grasblock',
 BLOCKS[BLOCK.LEAFY_GRASS] = { name: 'Laubbedecktes Gras',
   tiles: { top: 'leafy_grass_top', side: 'leafy_grass_side', bottom: 'dirt' },
   hardness: 0.9, tool: 'shovel', harvestLevel: 0, drops: BLOCK.DIRT, opaque: true };
+// Obsidian: sehr hart, nur mit Diamantspitzhacke abbaubar (Wasser auf Lava-Quelle)
+BLOCKS[BLOCK.OBSIDIAN] = { name: 'Obsidian', tiles: { side: 'obsidian' },
+  hardness: 50, tool: 'pickaxe', harvestLevel: 3, opaque: true };
+// Bücherregal: Bretter-Rahmen mit Büchern
+BLOCKS[BLOCK.BOOKSHELF] = { name: 'Bücherregal',
+  tiles: { top: 'planks', side: 'bookshelf', bottom: 'planks' },
+  hardness: 1.5, tool: 'axe', harvestLevel: 0, opaque: true };
+// Verzauberungstisch: hier werden Items verzaubert (Mechanik folgt)
+BLOCKS[BLOCK.ENCHANTING_TABLE] = { name: 'Verzauberungstisch',
+  tiles: { top: 'ench_table_top', side: 'ench_table_side', bottom: 'obsidian' },
+  hardness: 5, tool: 'pickaxe', harvestLevel: 1, opaque: true, enchanting: true };
 // Kleine Bodenpilze (Kreuz-Sprites)
 BLOCKS[BLOCK.MUSHROOM_RED] = { name: 'Roter Pilz', tiles: { side: 'mushroom_red' },
   hardness: 0.05, tool: null, harvestLevel: 0, opaque: false, solid: false, cross: true };
@@ -864,6 +882,10 @@ Object.assign(ITEMS, {
   [ITEM.DIAMOND]: { name: 'Diamant', tile: 'diamond' },
   [ITEM.EMERALD]: { name: 'Smaragd', tile: 'emerald' },
   [ITEM.SAPPHIRE]: { name: 'Saphir', tile: 'sapphire' },
+  [ITEM.LEATHER]: { name: 'Leder', tile: 'leather' },
+  [ITEM.PAPER]: { name: 'Papier', tile: 'paper' },
+  [ITEM.BOOK]: { name: 'Buch', tile: 'book' },
+  [ITEM.SPELL_CORE]: { name: 'Spell Core', tile: 'spell_core' },
   [ITEM.BACKPACK]: { name: 'Rucksack', tile: 'backpack', stackSize: 1, instance: true },
   [ITEM.BOW]: { name: 'Bogen', tile: 'bow', stackSize: 1, dur: 250 },
   [ITEM.ARROW]: { name: 'Pfeil', tile: 'arrow' },

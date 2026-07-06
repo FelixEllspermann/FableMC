@@ -110,8 +110,9 @@ Kreativmodus: **2×Leertaste** fliegen · **B** Biom-Teleport · **F4** Spectato
 - **Fluid-Simulation** — Wasser & Lava mit Pegeln, Strömung, Verfestigung; animierte Strömungstextur & Gischt-Partikel
 - **Struktur-Vielfalt** — Dörfer mit Villagern & **Handel**, Magier-Türme, prozedurale **Dungeons**, Dschungel-Tempel, Schiffswracks, Unterwasser-Ruinen, Wüstenbrunnen
 - **Überleben** — Herzen, Hunger, Rüstung mit Verteidigung & Dornen, roh vs. gebraten, Fallschaden, Ertrinken; Tag-/Nacht-Zyklus mit Monstern
-- **Mobs & Zucht** — Schweine, Schafe (scherbar), Hühner, Fische, Zombies, Skelette, Creeper, Villager + Blutroter-Zombie-**Boss**; Tiere lassen sich füttern & **züchten**
+- **Mobs & Zucht** — Schweine, **Kühe** (Leder), Schafe (scherbar), Hühner, Fische, Zombies, Skelette, Creeper, Villager + Blutroter-Zombie-**Boss**; Tiere lassen sich füttern & **züchten**
 - **Crafting & Upgrades** — 3×3-Werkbank, Werkzeuge/Rüstung in 5 Materialien, **Amboss**-Upgrades (kosten XP); **XP & Level**; **Bogen & Pfeile**
+- **Verzauberungen** — Kühe → Leder → Bücher, Bücherregale, Obsidian & **Verzauberungstisch** (Spell Core aus Magier-Türmen); 3 Seltenheitsstufen würfeln **Unzerbrechlich, Effizienz, Schärfe, Schutz & Stauraum** (kosten XP + Smaragde/Saphire)
 - **Bauen** — Truhen, Türen, Glas(scheiben), Leitern, Falltüren, Teppiche, Betten, **farbige Bretter, Treppen & Stufen** je Holzart (Eiche/Birke/Fichte/Dschungel)
 - **Einstellungen** — Menü **Deutsch/Englisch**, **frei belegbare Steuerung**, Sichtweite, Wolken an/aus, **Bildrate-Grenze & VSync**
 - **Speichern/Laden** — Autosave in `localStorage` (Einzelspieler) bzw. serverseitig (Mehrspieler)

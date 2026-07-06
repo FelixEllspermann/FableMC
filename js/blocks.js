@@ -105,6 +105,8 @@ export class SpecialBlocks {
       const rollen = [ITEM.SCROLL_MINING, ITEM.SCROLL_WATER, ITEM.SCROLL_LEVITATION];
       c.slots[13] = { id: rollen[(Math.random() * 3) | 0], count: 1 };
     }
+    // sehr seltenes Highlight: ein Spell Core für den Verzauberungstisch
+    if (Math.random() < 0.06) c.slots[4] = { id: ITEM.SPELL_CORE, count: 1 };
     // Kristalle (1–2 Farben), Diamanten, Gold, Knochen — bewusst KEIN Eisen
     const frei = [3, 5, 11, 15, 21, 23];
     let fi = 0;

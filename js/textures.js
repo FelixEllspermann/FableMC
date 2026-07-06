@@ -574,6 +574,44 @@ const PAINTERS = {
   },
   coal(p) { p.blob(8, 8, 5, 4.5, '#2b2b2b', '#454545', '#161616'); },
   raw_iron(p) { p.blob(8, 8, 5, 4.5, '#d8af93', '#eecbb4', '#b78868'); },
+  // ---- Verzauberungs-Kette (Leder, Papier, Buch, Spell Core; Obsidian, Regal, Tisch) ----
+  leather(p) { p.blob(8, 8, 5, 4, '#8a5a34', '#a8764a', '#6b4526'); p.px(6, 6, '#6b4526'); p.px(10, 10, '#6b4526'); },
+  paper(p) {
+    p.rect(3, 2, 10, 12, '#efeadd');
+    p.rect(3, 2, 10, 1, '#d8d2c2'); p.rect(3, 13, 10, 1, '#d8d2c2');
+    for (let y = 4; y <= 11; y += 2) p.rect(5, y, 6, 1, '#c9c2ad');
+  },
+  book(p) {
+    p.rect(3, 2, 10, 12, '#8a3b2e');   // Einband
+    p.rect(4, 3, 8, 10, '#a54a38');
+    p.rect(11, 3, 1, 10, '#efeadd');   // Seiten
+    p.rect(3, 6, 10, 1, '#e0c65a');    // goldenes Band
+  },
+  spell_core(p) {
+    p.clear(0, 0, 16, 16);
+    p.blob(8, 8, 5, 5, '#5a3ba8', '#8a6ad8', '#3a2570');
+    p.px(8, 8, '#e6dcff'); p.px(7, 7, '#c8b8ff'); p.px(9, 9, '#c8b8ff');
+    for (const [x, y] of [[3, 4], [13, 5], [4, 12], [12, 11], [8, 2]]) p.px(x, y, '#b6a0ff');
+  },
+  obsidian(p) {
+    p.speckle(['#241a33', '#1c1428', '#2e2242', '#15101f'], [0.35, 0.3, 0.2, 0.15]);
+    for (let i = 0; i < 5; i++) { const x = Math.floor(p.rand() * 15), y = Math.floor(p.rand() * 15); p.px(x, y, '#4a3a6a'); }
+  },
+  bookshelf(p) {
+    paintPlanks(p);
+    p.rect(0, 4, 16, 3, '#3a2a1c'); p.rect(0, 10, 16, 3, '#3a2a1c'); // zwei Regalböden
+    const cols = ['#a54a38', '#3f7a3a', '#3a5aa0', '#c0a02f', '#7a3a9a', '#a86a2a', '#4a8a8a'];
+    for (const row of [4, 10]) for (let i = 0; i < 7; i++) p.rect(1 + i * 2, row, 1, 3, cols[(i + row) % cols.length]);
+  },
+  ench_table_top(p) {
+    p.speckle(['#241a33', '#1c1428', '#2e2242'], [0.4, 0.35, 0.25]);
+    p.rect(4, 4, 8, 8, '#3a2a5a'); p.rect(5, 5, 6, 6, '#6a4aa8');
+    p.px(7, 7, '#d6c8ff'); p.px(8, 8, '#d6c8ff'); p.px(8, 7, '#b6a0ff'); p.px(7, 8, '#b6a0ff');
+  },
+  ench_table_side(p) {
+    p.speckle(['#241a33', '#1c1428', '#2e2242', '#15101f'], [0.35, 0.3, 0.2, 0.15]);
+    for (const [x, y] of [[3, 3], [11, 5], [5, 9], [12, 11], [8, 7]]) p.px(x, y, '#8a6ad8');
+  },
   snow(p) { p.speckle(['#f6f9fc', '#eaf0f6', '#dfe8f0'], [0.55, 0.3, 0.15]); },
   grass_side_snowy(p) {
     paintDirt(p);
