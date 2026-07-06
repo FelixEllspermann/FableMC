@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { armorStats } from './equip.js';
 import { Keybinds } from './keybinds.js';
 import { BLOCK, ITEM, BLOCKS, ITEMS } from './constants.js';
+import { getSession } from './auth.js';
 
 const CHAT_STYLE = `
 .mp-chatlog {
@@ -178,7 +179,9 @@ export class Net {
       let ws;
       try { ws = new WebSocket(url); } catch (e) { reject(e); return; }
       const timeout = setTimeout(() => { ws.close(); reject(new Error('Zeitüberschreitung')); }, 8000);
-      ws.onopen = () => ws.send(JSON.stringify({ type: 'hello', name }));
+      // Konto-Token mitschicken — ein Server mit Konto-Pflicht bestätigt damit den Namen.
+      const token = getSession()?.token || '';
+      ws.onopen = () => ws.send(JSON.stringify({ type: 'hello', name, token }));
       ws.onerror = () => { clearTimeout(timeout); reject(new Error('Verbindung fehlgeschlagen')); };
       ws.onmessage = (ev) => {
         let msg;
@@ -187,6 +190,14 @@ export class Net {
           clearTimeout(timeout);
           ws.close();
           reject(new Error('Du bist auf diesem Server gebannt'));
+          return;
+        }
+        if (msg.type === 'authfail') { // Konto-Pflicht: Token fehlt/ungültig/schon online
+          clearTimeout(timeout);
+          ws.close();
+          const err = new Error(msg.reason || 'Anmeldung am Server fehlgeschlagen');
+          err.auth = true;
+          reject(err);
           return;
         }
         if (msg.type === 'welcome') {
@@ -459,6 +470,7 @@ export class Net {
         break;
       case 'kicked': this._rauswurf('⚠ Du wurdest vom Server geworfen'); break;
       case 'banned': this._rauswurf('⛔ Du wurdest von diesem Server gebannt'); break;
+      case 'authfail': this._rauswurf('⛔ ' + (m.reason || 'Konto-Anmeldung ungültig')); break;
       // ---- Moderator-Befehle ----
       case 'cmd': this._applyCmd(m); break;                 // Server-Aktion an mich (tp/kill/give …)
       case 'modset': this.mod = !!m.on; break;              // Mod-Status geändert

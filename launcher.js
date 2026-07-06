@@ -117,6 +117,15 @@ let startedAt = 0;
 let letzterExit = null;  // { code, at }
 let letztesPvp = false;  // zuletzt gewählte PvP-Einstellung (für Neustart)
 let letzteInfo = null;   // zuletzt gewählte Server-Identität (Name/MotD/Bild) — bleibt bei Neustart
+// Konto-Pflicht (Anti-Spoofing) — bleibt lokal in server-auth.json, wird beim Start hinterlegt.
+const AUTH_DATEI = path.join(__dirname, 'server-auth.json');
+let letzteAuth = { url: '', required: true };
+try {
+  if (fs.existsSync(AUTH_DATEI)) {
+    const d = JSON.parse(fs.readFileSync(AUTH_DATEI, 'utf8'));
+    letzteAuth = { url: String(d.url || ''), required: d.required !== false };
+  }
+} catch { /* egal — dann eben ohne Konto-Pflicht */ }
 const logBuf = [];
 
 function logZeile(s) {
@@ -157,6 +166,14 @@ function starteServer(slug, wunschPort, pvp, info) {
   }
   try { fs.writeFileSync(path.join(__dirname, 'server-info.json'), JSON.stringify(letzteInfo || {})); }
   catch (e) { logZeile('Server-Info konnte nicht geschrieben werden: ' + e.message); }
+  // Konto-Pflicht (Anti-Spoofing) hinterlegen — nur wenn die UI sie mitschickt; ein Neustart
+  // (ohne info) behält den letzten Stand, überschreibt also die URL nie versehentlich mit leer.
+  if (info && info.authUrl !== undefined) {
+    letzteAuth = { url: String(info.authUrl || '').trim().slice(0, 300), required: info.authRequired !== false };
+  }
+  try { fs.writeFileSync(AUTH_DATEI, JSON.stringify(letzteAuth, null, 2)); }
+  catch (e) { logZeile('Konto-Konfig konnte nicht geschrieben werden: ' + e.message); }
+  if (letzteAuth.url) logZeile('🔐 Konto-Pflicht aktiv — Namen werden über ' + letzteAuth.url + ' bestätigt.');
   child = spawn(process.execPath, [SERVER_JS, '--welt', datei, '--port', String(gamePort),
     '--parent', String(process.pid), '--pvp', letztesPvp ? '1' : '0'], {
     cwd: __dirname, stdio: ['pipe', 'pipe', 'pipe'],
@@ -283,6 +300,7 @@ async function stateObj() {
     uptimeSec: laeuft ? Math.floor((Date.now() - startedAt) / 1000) : 0,
     letzterExit,
     status,
+    auth: { url: letzteAuth.url, required: letzteAuth.required }, // Konto-Pflicht (fürs Vorbelegen)
     log: logBuf.slice(-80),
   };
 }
@@ -312,7 +330,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url === '/api/state') { json(await stateObj()); return; }
     if (req.method === 'GET' && url === '/api/worlds') { json({ worlds: listWorlds() }); return; }
     if (req.method === 'POST' && url === '/api/start') {
-      const b = await body(req); const r = starteServer(b.slug, b.port, b.pvp, { name: b.sName, motd: b.motd, icon: b.icon }); json(r, r.ok ? 200 : 400); return;
+      const b = await body(req); const r = starteServer(b.slug, b.port, b.pvp, { name: b.sName, motd: b.motd, icon: b.icon, authUrl: b.authUrl, authRequired: b.authRequired }); json(r, r.ok ? 200 : 400); return;
     }
     if (req.method === 'POST' && url === '/api/new') {
       const b = await body(req);
@@ -320,7 +338,7 @@ const server = http.createServer(async (req, res) => {
         json({ ok: false, fehler: 'Ungültiger Port (1024–65535, nicht ' + CTRL_PORT + ').' }, 400); return;
       }
       const slug = createWorld(b.name, b.seed);
-      const r = starteServer(slug, b.port, b.pvp, { name: b.sName, motd: b.motd, icon: b.icon }); json({ ...r, slug }, r.ok ? 200 : 400); return;
+      const r = starteServer(slug, b.port, b.pvp, { name: b.sName, motd: b.motd, icon: b.icon, authUrl: b.authUrl, authRequired: b.authRequired }); json({ ...r, slug }, r.ok ? 200 : 400); return;
     }
     if (req.method === 'POST' && url === '/api/stop') { stoppeServer(() => json({ ok: true })); return; }
     if (req.method === 'POST' && url === '/api/restart') { neustart(() => json({ ok: true })); return; }
@@ -509,6 +527,11 @@ const PANEL_HTML = `<!doctype html>
           <input type="file" id="iconFeld" accept="image/*" style="flex:1;color:#8b97b5">
           <button type="button" class="btn-mini" id="iconWeg" style="display:none">✕</button>
         </div>
+        <label class="pvpzeile" style="margin-top:16px"><input type="checkbox" id="authFeld"> <b>🔐 Konto-Pflicht</b> — nur angemeldete Spieler; der Server bestätigt jeden Namen (Anti-Spoofing)</label>
+        <div id="authUrlWrap" style="display:none">
+          <label>Konto-Server-URL (dein Backend — bleibt lokal in server-auth.json)</label>
+          <input type="text" id="authUrlFeld" maxlength="200" placeholder="http://deinhost.de">
+        </div>
       </div>
     </div>
     <div class="card">
@@ -646,10 +669,32 @@ const PANEL_HTML = `<!doctype html>
     try { localStorage.removeItem('fablemc.srvicon'); } catch (e) {}
     zeigeIcon();
   });
-  function serverIdentitaet() { return { sName: gewaehlterName(), motd: gewaehlteMotd(), icon: serverIcon }; }
+  // Konto-Pflicht (Anti-Spoofing): Checkbox + URL, vorbelegt aus server-auth.json (über /api/state)
+  var authPrefilled = false;
+  function zeigeAuthUrl() { $('authUrlWrap').style.display = $('authFeld').checked ? 'block' : 'none'; }
+  $('authFeld').addEventListener('change', zeigeAuthUrl);
+  function prefillAuth(a) {
+    if (authPrefilled) return; authPrefilled = true;
+    if (a && a.url) { $('authFeld').checked = true; $('authUrlFeld').value = a.url; }
+    zeigeAuthUrl();
+  }
+  function authOk() {
+    if ($('authFeld').checked && !$('authUrlFeld').value.trim()) {
+      zeigeHint('Bitte die Konto-Server-URL eintragen (oder Konto-Pflicht abwählen).'); return false;
+    }
+    return true;
+  }
+  function serverIdentitaet() {
+    return {
+      sName: gewaehlterName(), motd: gewaehlteMotd(), icon: serverIcon,
+      authUrl: $('authFeld').checked ? $('authUrlFeld').value.trim() : '', authRequired: true,
+    };
+  }
 
   function starteWelt(slug) {
-    if (busy) return; busy = true;
+    if (busy) return;
+    if (!authOk()) return;
+    busy = true;
     api('/api/start', Object.assign({ slug: slug, port: gewaehlterPort(), pvp: gewaehltesPvp() }, serverIdentitaet())).then(function (r) {
       busy = false;
       if (!r.ok) zeigeHint(r.fehler || 'Start fehlgeschlagen');
@@ -660,6 +705,7 @@ const PANEL_HTML = `<!doctype html>
     if (busy) return;
     var name = $('neuName').value.trim();
     if (!name) { zeigeHint('Bitte einen Namen für die Welt eingeben.'); return; }
+    if (!authOk()) return;
     busy = true;
     api('/api/new', Object.assign({ name: name, seed: $('neuSeed').value, port: gewaehlterPort(), pvp: gewaehltesPvp() }, serverIdentitaet())).then(function (r) {
       busy = false;
@@ -834,6 +880,7 @@ const PANEL_HTML = `<!doctype html>
 
   function tick() {
     api('/api/state').then(function (st) {
+      prefillAuth(st.auth); // Konto-Pflicht einmalig aus server-auth.json vorbelegen
       var pill = $('pill');
       if (st.running) {
         pill.className = 'pill ' + (st.booting ? 'boot' : 'on');

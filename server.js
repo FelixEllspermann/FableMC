@@ -30,6 +30,39 @@ let serverInfo = { name: '', motd: '', icon: '' };
 try {
   if (fs.existsSync(INFO_DATEI)) serverInfo = { ...serverInfo, ...JSON.parse(fs.readFileSync(INFO_DATEI, 'utf8')) };
 } catch (e) { console.warn('server-info.json unlesbar:', e.message); }
+
+// Konto-Pflicht / Anti-Spoofing — von der Steuerzentrale in server-auth.json geschrieben.
+// Ist eine url gesetzt, muss jeder Beitritt ein gültiges Konto-Token mitbringen; der
+// Server lässt es vom Backend (me.php) bestätigen und benutzt DEN dort bestätigten Namen.
+// So kann ein Client keinen fremden Namen vortäuschen. Fehlt die Datei → offener Server.
+const AUTH_DATEI = path.join(__dirname, 'server-auth.json');
+let authCfg = { url: '', required: true };
+try {
+  if (fs.existsSync(AUTH_DATEI)) {
+    const d = JSON.parse(fs.readFileSync(AUTH_DATEI, 'utf8'));
+    authCfg.url = String(d.url || '').trim().replace(/\/+$/, '');
+    if (d.required === false) authCfg.required = false;
+  }
+} catch (e) { console.warn('server-auth.json unlesbar:', e.message); }
+const AUTH_AN = !!authCfg.url;
+if (AUTH_AN) console.log(`🔐 Konto-Pflicht aktiv — Namen werden über ${authCfg.url}/me.php bestätigt`);
+
+// Token beim Konto-Backend prüfen → bestätigter Benutzername oder null (fail-closed).
+async function pruefeKonto(token) {
+  if (!token || typeof token !== 'string' || token.length > 4096) return null;
+  try {
+    const r = await fetch(authCfg.url + '/me.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+      signal: AbortSignal.timeout(6000),
+    });
+    const j = await r.json().catch(() => null);
+    if (r.ok && j && j.ok === true && typeof j.username === 'string' && j.username) return j.username;
+  } catch { /* Netz-/Timeout-Fehler → als ungültig behandeln (sicher: kein Beitritt) */ }
+  return null;
+}
+
 const TAG_LAENGE = 2400; // Sekunden pro Zyklus (= DAY_LENGTH): 30 min Tag + 10 min Nacht
 // Sonnenphase wie in daynight.js: Tag füllt die ersten 3/4 des Zyklus
 function sonnenphase(f) {
@@ -368,14 +401,35 @@ wss.on('connection', (ws, req) => {
   }
   // Server-Identität sofort schicken — auch der Status-Ping (ohne „hello") liest sie
   sende(ws, { type: 'serverinfo', name: serverInfo.name, motd: serverInfo.motd, icon: serverInfo.icon });
-  ws.on('message', (raw) => {
+  ws.on('message', async (raw) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
     const ich = spieler.get(ws);
 
     if (msg.type === 'hello') {
+      if (spieler.has(ws) || ws._joining) return; // Doppel-„hello" abweisen
+      ws._joining = true;
+      let name = String(msg.name || 'Spieler').slice(0, 20) || 'Spieler';
+      // Anti-Spoofing: bei Konto-Pflicht muss ein gültiges Token dabei sein; der vom
+      // Backend bestätigte Name gewinnt — der Client kann keinen fremden Namen wählen.
+      if (AUTH_AN) {
+        const bestaetigt = await pruefeKonto(msg.token);
+        if (ws.readyState !== 1) return; // während der Prüfung getrennt
+        if (bestaetigt) {
+          name = String(bestaetigt).slice(0, 20);
+        } else if (authCfg.required) {
+          sende(ws, { type: 'authfail', reason: 'Anmeldung ungültig oder Konto-Server nicht erreichbar. Bitte neu anmelden.' });
+          setTimeout(() => { try { ws.close(); } catch { /* egal */ } }, 200);
+          return;
+        }
+        // Konto bereits online? Zweite gleichzeitige Sitzung desselben Kontos abweisen.
+        if (bestaetigt && [...spieler.values()].some((p) => p.name === name)) {
+          sende(ws, { type: 'authfail', reason: 'Dieses Konto ist bereits auf dem Server aktiv.' });
+          setTimeout(() => { try { ws.close(); } catch { /* egal */ } }, 200);
+          return;
+        }
+      }
       const id = nextId++;
-      const name = String(msg.name || 'Spieler').slice(0, 20) || 'Spieler';
       merkeName(ip, name);
       const mod = istMod(ip);
       spieler.set(ws, { id, name, ip, mod, muted: false, x: 0, y: 200, z: 0, yaw: 0, pitch: 0 });

@@ -32,6 +32,7 @@ export const LANGS = {
     'sp.survival': 'Überleben',
     // Mehrspieler
     'mp.namePlaceholder': 'Spielername',
+    'mp.joinAs': 'Beitreten als:',
     'mp.addrPlaceholder': 'Server-Adresse (leer = dieser Server)',
     'mp.join': 'Mehrspieler beitreten',
     'mp.rejoin': 'Wieder verbinden',
@@ -133,6 +134,7 @@ export const LANGS = {
     'sp.survival': 'Survival',
     // Multiplayer
     'mp.namePlaceholder': 'Player name',
+    'mp.joinAs': 'Join as:',
     'mp.addrPlaceholder': 'Server address (empty = this server)',
     'mp.join': 'Join multiplayer',
     'mp.rejoin': 'Reconnect',

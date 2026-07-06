@@ -10,6 +10,7 @@ server-info.json
 
 # Privates Konto-Backend (PHP) & die eingetragene Backend-URL — bleiben lokal
 account-backend/
+server-auth.json
 
 # Werkzeug-, Editor- und OS-Dateien
 .claude/

@@ -120,6 +120,8 @@ const STYLE = `
 .ui-user-bar { color: #cfe0ff; font-size: 13px; margin-top: 8px; text-shadow: 1px 1px 0 #1a2036; }
 .ui-user-bar b { color: #fff; }
 .ui-user-logout { margin-left: 6px; color: #ffb3a8; cursor: pointer; text-decoration: underline; }
+.ui-mp-asuser { color: #cfe0ff; font-size: 13px; margin: 2px 0 6px; text-shadow: 1px 1px 0 #1a2036; }
+.ui-mp-asuser b { color: #fff; }
 .ui-btn {
   font-size: 19px; padding: 10px 0; width: 320px; text-align: center;
   background: #6d6d6d; color: #fff; text-shadow: 2px 2px 0 #3f3f3f;
@@ -777,29 +779,46 @@ export class UI {
       spScreen.appendChild(this._btnT('menu.back', () => zeige(mainScreen)));
 
       // ---- Mehrspieler ----
-      const nameInput = document.createElement('input');
-      nameInput.className = 'ui-seed';
-      this._reg(() => { nameInput.placeholder = t('mp.namePlaceholder'); });
-      nameInput.maxLength = 20;
-      mpScreen.appendChild(nameInput);
+      // Mit Account beitreten: ist man angemeldet, wird automatisch der Account-Name
+      // benutzt (kein Namensfeld). Ohne eingerichtetes Konto-System bleibt das Namensfeld.
+      const mpKonto = currentUser();
+      let nameInput = null;
+      if (mpKonto) {
+        const asLine = document.createElement('div');
+        asLine.className = 'ui-mp-asuser';
+        const fillAsLine = () => {
+          asLine.textContent = t('mp.joinAs') + ' ';
+          const b = document.createElement('b'); b.textContent = mpKonto; asLine.appendChild(b);
+        };
+        fillAsLine(); this._reg(fillAsLine);
+        mpScreen.appendChild(asLine);
+      } else {
+        nameInput = document.createElement('input');
+        nameInput.className = 'ui-seed';
+        this._reg(() => { nameInput.placeholder = t('mp.namePlaceholder'); });
+        nameInput.maxLength = 20;
+        mpScreen.appendChild(nameInput);
+      }
       const addrInput = document.createElement('input');
       addrInput.className = 'ui-seed';
       this._reg(() => { addrInput.placeholder = t('mp.addrPlaceholder'); });
       mpScreen.appendChild(addrInput);
-      const joinWith = (name, adresse) => {
+      // Der Beitritts-Name kommt vom Account (falls angemeldet), sonst aus dem Namensfeld.
+      const joinName = () => (mpKonto || (nameInput ? nameInput.value : '') || '').trim() || t('mp.defaultName');
+      const joinWith = (adresse) => {
         overlay.remove();
         resolve({
           mode: 'multiplayer', gamemode: 'survival',
-          name: (name || '').trim() || t('mp.defaultName'), adresse: (adresse || '').trim(),
+          name: joinName(), adresse: (adresse || '').trim(),
         });
       };
-      mpScreen.appendChild(this._btnT('mp.join', () => joinWith(nameInput.value, addrInput.value)));
+      mpScreen.appendChild(this._btnT('mp.join', () => joinWith(addrInput.value)));
 
-      // vorherige Server laden, Namensfeld vorbelegen
+      // vorherige Server laden, Namensfeld ggf. vorbelegen (nur ohne Konto)
       let servers = [];
       try { servers = JSON.parse(localStorage.getItem('fablemc.servers.v1') || '[]'); } catch { servers = []; }
       if (!Array.isArray(servers)) servers = [];
-      if (servers[0]?.name && !nameInput.value) nameInput.value = servers[0].name;
+      if (nameInput && servers[0]?.name && !nameInput.value) nameInput.value = servers[0].name;
 
       // ── Vorherige Server (mit Online-Status) ──
       const srvHead = document.createElement('div');
@@ -838,7 +857,7 @@ export class UI {
           applyInfo(cached);
           const go = document.createElement('button'); go.className = 'ui-list-go';
           go.textContent = t('mp.connect');
-          go.addEventListener('click', () => joinWith(nameInput.value || srv.name, srv.adresse));
+          go.addEventListener('click', () => joinWith(srv.adresse));
           const del = document.createElement('button'); del.className = 'ui-list-del';
           del.textContent = '✕';
           del.addEventListener('click', () => {

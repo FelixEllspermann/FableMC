@@ -234,7 +234,8 @@ async function boot() {
       welcome = await ctx.net.connect(choice.name, choice.adresse);
     } catch (e) {
       ui.showLoading(false);
-      alert('Verbindung fehlgeschlagen: ' + e.message + '\nLäuft der Server? (npm run mp)');
+      // Konto-Abweisung: klare Meldung ohne den irreführenden „läuft der Server?"-Hinweis
+      alert(e.auth ? e.message : ('Verbindung fehlgeschlagen: ' + e.message + '\nLäuft der Server? (npm run mp)'));
       location.reload();
       return;
     }
