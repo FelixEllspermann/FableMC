@@ -12,11 +12,16 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo Starte Fable MC Steuerzentrale ...
-echo (Dieses Fenster offen lassen - Schliessen beendet den Server.)
-echo.
-node launcher.js
+if not exist "node_modules\electron" (
+  echo.
+  echo   Electron ist noch nicht installiert.
+  echo   Bitte einmal in diesem Ordner  npm install  ausfuehren.
+  echo.
+  pause
+  exit /b 1
+)
 
-echo.
-echo Steuerzentrale beendet. Fenster kann geschlossen werden.
-pause
+REM Ohne Konsolenfenster starten: die versteckte .vbs uebernimmt, dieses
+REM Fenster schliesst sich sofort wieder. Die Steuerzentrale laeuft in ihrem
+REM eigenen Fenster - schliesst man es, wird der Server sauber gestoppt.
+start "" wscript.exe "%~dp0Fable MC.vbs"

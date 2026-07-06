@@ -361,7 +361,11 @@ function panelOeffnen(url) {
     const electronPfad = require('electron'); // Pfad zur Electron-Binärdatei (im Node-Kontext)
     const script = path.join(__dirname, 'electron-panel.cjs');
     if (typeof electronPfad === 'string' && fs.existsSync(electronPfad) && fs.existsSync(script)) {
-      spawn(electronPfad, [script, url], { detached: true, stdio: 'ignore' }).unref();
+      // NICHT detached: ohne sichtbare Konsole ist das Steuerzentrale-Fenster der einzige
+      // Schalter — wird es geschlossen, beenden wir Server + Launcher sauber.
+      const fenster = spawn(electronPfad, [script, url], { stdio: 'ignore' });
+      fenster.on('exit', () => beenden());
+      fenster.on('error', () => browserOeffnen(url));
       return;
     }
   } catch { /* Electron fehlt → Browser */ }

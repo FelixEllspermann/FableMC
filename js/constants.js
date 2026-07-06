@@ -167,6 +167,7 @@ export const BLOCK = {
   BIRCH_STAIRS_E_TOP: 196, BIRCH_STAIRS_W_TOP: 197, BIRCH_STAIRS_S_TOP: 198, BIRCH_STAIRS_N_TOP: 199,
   SPRUCE_STAIRS_E_TOP: 200, SPRUCE_STAIRS_W_TOP: 201, SPRUCE_STAIRS_S_TOP: 202, SPRUCE_STAIRS_N_TOP: 203,
   JUNGLE_STAIRS_E_TOP: 204, JUNGLE_STAIRS_W_TOP: 205, JUNGLE_STAIRS_S_TOP: 206, JUNGLE_STAIRS_N_TOP: 207,
+  PEBBLES_WET: 208, // Unterwasser-Kiesel (Zelle bleibt Wasser — waterPlant)
 };
 
 // blocks mobs may spawn on / that count as "grass-like" ground
@@ -613,14 +614,21 @@ for (const dir of ['N', 'E', 'S', 'W', 'UP', 'DOWN']) {
     hardness: 2, tool: 'pickaxe', harvestLevel: 0, opaque: true, redstone: 'piston', pistonDir: dir, sticky: true,
     drops: BLOCK.STICKY_PISTON_N, hidden: dir !== 'N' };
 }
+// Flache Steinchen, die bündig auf dem Boden liegen (niedrig → schweben nicht).
+const PEBBLE_BOXES = [
+  [0.10, 0, 0.16, 0.44, 0.075, 0.50],
+  [0.50, 0, 0.32, 0.86, 0.090, 0.68],
+  [0.24, 0, 0.56, 0.54, 0.055, 0.86],
+  [0.56, 0, 0.14, 0.80, 0.050, 0.40],
+];
 BLOCKS[BLOCK.PEBBLES] = { name: 'Kiesel', tiles: { side: 'pebbles' },
   hardness: 0.05, tool: null, harvestLevel: 0, opaque: false, solid: false,
-  pebbles: true, drops: 1064 /* ITEM.PEBBLE */,
-  boxes: [
-    [0.15, 0, 0.2, 0.45, 0.14, 0.5],
-    [0.55, 0, 0.4, 0.82, 0.18, 0.68],
-    [0.3, 0, 0.62, 0.52, 0.1, 0.82],
-  ] };
+  pebbles: true, drops: 1064 /* ITEM.PEBBLE */, boxes: PEBBLE_BOXES };
+// Unterwasser-Kiesel: gleiche Optik, aber die Zelle gilt als Wasser (waterPlant),
+// damit kein Luftloch im Meer entsteht. Nur per Weltgenerierung, aufsammelbar.
+BLOCKS[BLOCK.PEBBLES_WET] = { name: 'Kiesel', tiles: { side: 'pebbles' },
+  hardness: 0.05, tool: null, harvestLevel: 0, opaque: false, solid: false,
+  pebbles: true, waterPlant: true, drops: 1064 /* ITEM.PEBBLE */, hidden: true, boxes: PEBBLE_BOXES };
 
 BLOCKS[BLOCK.SAPLING] = { name: 'Eichensetzling', tiles: { side: 'sapling' },
   hardness: 0.05, tool: null, harvestLevel: 0, opaque: false, solid: false, cross: true, sapling: 'oak' };
@@ -647,7 +655,7 @@ for (const [nm, ids, seed, produce, tile] of [
     BLOCKS[id] = {
       name: nm + ' (Stufe ' + (i + 1) + ')', tiles: { side: tile + '_' + i },
       hardness: 0.02, tool: null, harvestLevel: 0, opaque: false, solid: false, cross: true, drops: 0,
-      crop: { name: nm, stage: i, next: ids[i + 1] || 0, mature: i === ids.length - 1, seed, produce },
+      crop: { name: nm, stage: i, next: ids[i + 1] || 0, first: ids[0], mature: i === ids.length - 1, seed, produce },
     };
   });
 }
@@ -665,7 +673,7 @@ for (const id of [BLOCK.LAVA_FLOW6, BLOCK.LAVA_FLOW4, BLOCK.LAVA_FLOW2]) {
 // ---- Flüssigkeits-Helfer ----
 export function isWaterId(id) {
   return id === BLOCK.WATER || (id >= BLOCK.WATER_FLOW7 && id <= BLOCK.WATER_FLOW1)
-    || id === BLOCK.SEAGRASS || id === BLOCK.KELP; // wassergeflutete Pflanzen
+    || id === BLOCK.SEAGRASS || id === BLOCK.KELP || id === BLOCK.PEBBLES_WET; // wassergeflutet
 }
 export function isLavaId(id) {
   return id === BLOCK.LAVA || (id >= BLOCK.LAVA_FLOW6 && id <= BLOCK.LAVA_FLOW2);

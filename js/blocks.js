@@ -379,9 +379,9 @@ export class SpecialBlocks {
         put(x, y + 1, z, BLOCK.AIR);
         this.ctx.entities.spawnItemDrop(x + 0.5, y + 1.5, z + 0.5, BLOCK.SHRUB, 1);
       }
-      if (above === BLOCK.PEBBLES && !isSolid(id)) {
-        put(x, y + 1, z, BLOCK.AIR);
-        this.ctx.entities.spawnItemDrop(x + 0.5, y + 1.5, z + 0.5, BLOCKS[BLOCK.PEBBLES].drops, 1);
+      if ((above === BLOCK.PEBBLES || above === BLOCK.PEBBLES_WET) && !isSolid(id)) {
+        put(x, y + 1, z, above === BLOCK.PEBBLES_WET ? BLOCK.WATER : BLOCK.AIR);
+        this.ctx.entities.spawnItemDrop(x + 0.5, y + 1.5, z + 0.5, BLOCKS[above].drops, 1);
       }
       if (above === BLOCK.CACTUS &&
           ![BLOCK.CACTUS, BLOCK.SAND, BLOCK.RED_SAND].includes(id)) {

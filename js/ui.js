@@ -3,8 +3,9 @@
 import { SaveManager } from './save.js';
 import { biomeAt, columnInfo } from './worldgen.js';
 import { Settings } from './settings.js';
+import { Rules } from '../config.js';
 import {
-  VOXEL_DETAIL_CAP, CHUNK_SIZE, DAY_LENGTH, BLOCKS, ITEMS, isBlockId, nameOf,
+  VOXEL_DETAIL_CAP, CHUNK_SIZE, BLOCKS, ITEMS, isBlockId, nameOf,
   yawToCardinal,
 } from './constants.js';
 import { isEquipment, maxDurability, durabilityLeft } from './equip.js';
@@ -706,7 +707,7 @@ export class UI {
     const hours = (f * 24 + 6) % 24;
     const hh = String(Math.floor(hours)).padStart(2, '0');
     const mm = String(Math.floor((hours % 1) * 60)).padStart(2, '0');
-    const tag = Math.floor(this.ctx.state.time / DAY_LENGTH) + 1;
+    const tag = Math.floor(this.ctx.state.time / Rules.dayLengthSec) + 1;
 
     // Effekte
     const fx = player.effects || {};

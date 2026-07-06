@@ -21,11 +21,6 @@ if not exist "node_modules\electron" (
   exit /b 1
 )
 
-echo Starte Fable MC ...
-echo (Dieses Fenster offen lassen - Schliessen beendet das Spiel.)
-echo.
-call npm run app
-
-echo.
-echo Fable MC beendet. Fenster kann geschlossen werden.
-pause
+REM Ohne Konsolenfenster starten: die versteckte .vbs uebernimmt, dieses
+REM Fenster schliesst sich sofort wieder. Das Spiel laeuft in seinem Fenster.
+start "" wscript.exe "%~dp0Fable MC App.vbs"

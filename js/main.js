@@ -1,7 +1,7 @@
 // Boot + game loop. Assembles the shared ctx and wires all modules together.
 
 import * as THREE from 'three';
-import { DAY_LENGTH } from './constants.js';
+import { Rules, applyRules } from '../config.js';
 import { Sounds } from './sounds.js';
 import { createAtlas, updateAnimatedTiles } from './textures.js';
 import { findSpawn } from './worldgen.js';
@@ -152,6 +152,7 @@ async function boot() {
       localStorage.setItem('fablemc.lastserver',
         JSON.stringify({ name: choice.name, adresse: choice.adresse || '' }));
     } catch { /* Speicher voll — egal */ }
+    applyRules(welcome.rules); // im Mehrspieler gelten die Regeln des Servers
     choice.seed = welcome.seed;
   }
   ctx.seed = choice.seed;
@@ -230,7 +231,7 @@ async function boot() {
     ctx.blocks.restore(saved.blocks);
   } else {
     ctx.state.mode = choice.gamemode === 'creative' ? 'creative' : 'survival';
-    ctx.state.time = 0.03 * DAY_LENGTH; // morning
+    ctx.state.time = Rules.startFraction * Rules.dayLengthSec; // Startzeit aus der config.js
     const s = findSpawn(ctx.seed);
     ctx.player.respawnAt(s.x, s.y, s.z);
   }

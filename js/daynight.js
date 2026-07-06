@@ -1,7 +1,8 @@
 // Day/night cycle: sun orbit, sky/fog colors, ambient light, stars.
 
 import * as THREE from 'three';
-import { DAY_LENGTH, CHUNK_SIZE, isWaterId, isLavaId } from './constants.js';
+import { CHUNK_SIZE, isWaterId, isLavaId } from './constants.js';
+import { Rules } from '../config.js';
 import { Settings } from './settings.js';
 
 const DAY = new THREE.Color(0x87ceeb);
@@ -57,8 +58,9 @@ export class DayNight {
   }
 
   get dayFraction() {
-    const t = this.ctx.state.time % DAY_LENGTH;
-    return (t < 0 ? t + DAY_LENGTH : t) / DAY_LENGTH;
+    const L = Rules.dayLengthSec;
+    const t = this.ctx.state.time % L;
+    return (t < 0 ? t + L : t) / L;
   }
 
   // Sonnenphase 0..1 → Winkel. Der Tagbogen (Sonne über dem Horizont, Phase

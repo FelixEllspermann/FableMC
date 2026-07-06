@@ -3,6 +3,7 @@
 import { PLAYER, isWaterId, ITEMS, nameOf, BLOCKS, BLOCK } from './constants.js';
 import { findSpawn } from './worldgen.js';
 import { equipStats, damageItem, armorStats } from './equip.js';
+import { Rules } from '../config.js';
 
 const ARMOR_SLOTS = ['helmet', 'chest', 'legs', 'boots'];
 
@@ -258,7 +259,7 @@ export class Survival {
     if (this.ctx.player.effects?.water > 0) {
       this.air = maxAir;
       this.drownTimer = 0;
-    } else if (isWaterId(eyeBlock)) {
+    } else if (Rules.drowning && isWaterId(eyeBlock)) {
       this.air = Math.max(0, this.air - dt);
       if (this.air <= 0) {
         this.drownTimer += dt;
@@ -300,26 +301,28 @@ export class Survival {
       }
     }
 
-    // hunger from exhaustion (+ slow passive drain)
-    this.exhaustion += 0.015 * dt;
-    if (this.exhaustion >= 4) {
-      this.exhaustion -= 4;
-      if (this.hunger > 0) {
-        this.hunger--;
-        this.render();
+    // hunger from exhaustion (+ slow passive drain) — nur wenn Hunger aktiv ist
+    if (Rules.hunger) {
+      this.exhaustion += 0.015 * dt;
+      if (this.exhaustion >= 4) {
+        this.exhaustion -= 4;
+        if (this.hunger > 0) {
+          this.hunger--;
+          this.render();
+        }
       }
     }
 
     // Heilung: läuft, solange der Hunger ≥ 60% (12) ist, und kostet 1 Hunger
     // pro Herz (1:1). Erster Tick nach 1 s Verzögerung, danach alle 0,5 s.
-    if (this.hunger >= 12 && this.health < 20) {
+    if (Rules.naturalRegen && this.hunger >= 12 && this.health < 20) {
       this.regenTimer += dt;
       const wartezeit = this.regenPrimed ? 0.5 : 1.0;
       if (this.regenTimer >= wartezeit) {
         this.regenTimer = 0;
         this.regenPrimed = true;
         this.health = Math.min(20, this.health + 1);
-        this.hunger = Math.max(0, this.hunger - 1);
+        if (Rules.hunger) this.hunger = Math.max(0, this.hunger - 1);
         this.render();
       }
     } else {

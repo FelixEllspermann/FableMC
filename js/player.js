@@ -4,9 +4,10 @@ import * as THREE from 'three';
 import {
   WALK_SPEED, SPRINT_SPEED, SNEAK_SPEED, JUMP_SPEED, SWIM_UP_SPEED, REACH, PLAYER,
   BLOCK, BLOCKS, ITEM, ITEMS, isBlockId, isLiquid, ATTACK_COOLDOWN, nameOf,
-  isSaplingId, GRASSY, DAY_LENGTH, isSolid, isStairsId, isSlabId, isCarpetId,
+  isSaplingId, GRASSY, isSolid, isStairsId, isSlabId, isCarpetId,
   toggledDoorId, doorId, yawToCardinal, CARDINAL_DELTA, CARDINAL_OPP,
 } from './constants.js';
+import { Rules } from '../config.js';
 import {
   isEquipment, damageItem, miningTimeFor, toolLevelFor, meleeDamageFor, equipStats, armorStats,
 } from './equip.js';
@@ -751,9 +752,10 @@ export class Player {
       this.rightHeld = false;
       return;
     }
-    // Kiesel: Rechtsklick hebt sie direkt auf
-    if (t && t.id === BLOCK.PEBBLES) {
-      this._editBlock(t.x, t.y, t.z, BLOCK.AIR);
+    // Kiesel (Land + Unterwasser): Rechtsklick hebt sie direkt auf
+    if (t && BLOCKS[t.id]?.pebbles) {
+      // Unterwasser-Kiesel hinterlassen Wasser statt Luft
+      this._editBlock(t.x, t.y, t.z, t.id === BLOCK.PEBBLES_WET ? BLOCK.WATER : BLOCK.AIR);
       const übrig = this.ctx.inventory.addItemStack({ id: ITEM.PEBBLE, count: 1 });
       if (übrig > 0) this.ctx.entities.dropSynced(t.x + 0.5, t.y + 0.3, t.z + 0.5, ITEM.PEBBLE, übrig);
       this.ctx.sounds.pickup();
@@ -808,8 +810,9 @@ export class Player {
       this.spawnPoint = { x: t.x, y: t.y + 1, z: t.z };
       if (this.ctx.daynight.isNight()) {
         this.ctx.ui.sleep(() => {
-          const day = Math.floor(this.ctx.state.time / DAY_LENGTH);
-          this.ctx.state.time = (day + 1) * DAY_LENGTH + 0.03 * DAY_LENGTH;
+          const L = Rules.dayLengthSec;
+          const day = Math.floor(this.ctx.state.time / L);
+          this.ctx.state.time = (day + 1) * L + Rules.startFraction * L;
           this.ctx.net?.sendTime(this.ctx.state.time); // Morgen für alle Mitspieler
         });
         this.ctx.ui.toast('Spawnpunkt gesetzt');
@@ -1206,7 +1209,7 @@ export class Player {
       const aStats = armorStats(this.ctx.inventory?.armor);
       const res = stepEntity(this.world, this, dt, { stepHeight: 0.55 + aStats.stepHeight });
       const fallLimit = 3 + aStats.fallBonus;
-      if (res.landed && res.fallDistance > fallLimit && s.mode === 'survival') {
+      if (Rules.fallDamage && res.landed && res.fallDistance > fallLimit && s.mode === 'survival') {
         this.ctx.survival.damage(Math.floor(res.fallDistance - fallLimit), 'fall');
       }
       if (this.inWater && !this.wasInWater && this.vel.y < -4) this.ctx.sounds.splash();

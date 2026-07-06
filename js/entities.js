@@ -3,11 +3,12 @@
 import * as THREE from 'three';
 import {
   BLOCK, ITEM, PIG_CAP, ZOMBIE_CAP, isBlockId, BLOCKS, ITEMS, GRASSY, isSolid, isLiquid,
-  isWaterId,
+  isWaterId, isLogId, isLeafId,
 } from './constants.js';
 import { stepEntity } from './physics.js';
 import { armorStats } from './equip.js';
 import { biomeAt, villagesNear } from './worldgen.js';
+import { Rules } from '../config.js';
 
 const SLIME_CAP = 5; // max. Schleime pro Spieler-Umkreis
 
@@ -454,6 +455,12 @@ export class EntityManager {
       remove: false,
     };
     e.maxHealth = e.health;
+    // Dorfbewohner bekommen einen Beruf (deterministisch aus der eid): Bauer / Holzfäller / Streuner
+    if (type === 'villager') {
+      const r = ((e.eid * 2654435761) >>> 0) % 100;
+      e.job = r < 42 ? 'farmer' : r < 72 ? 'lumberjack' : 'roam';
+      e.jobCd = 2 + Math.random() * 4; e.jobTarget = null; e.workT = 0; e._workAnim = false;
+    }
     if (e.modifiers.has('leben')) e.extraLives = 1;
     if (scale !== 1) e.mesh.scale.setScalar(scale);
     // Modifier-Färbung: der erste Modifier tönt das Modell
@@ -703,26 +710,29 @@ export class EntityManager {
     this.ctx.sounds.explode();
     this.ctx.furnaces?.burst(cx, cy, cz, Math.round(radius * 15));
 
-    // Blöcke im Kugelradius wegsprengen (Bedrock hält stand)
-    const iR = Math.ceil(radius);
-    const editListe = [];
-    for (let dy = -iR; dy <= iR; dy++) {
-      for (let dz = -iR; dz <= iR; dz++) {
-        for (let dx = -iR; dx <= iR; dx++) {
-          if (dx * dx + dy * dy + dz * dz > radius * radius) continue;
-          const bx = Math.floor(cx + dx), by = Math.floor(cy + dy), bz = Math.floor(cz + dz);
-          const id = w.getBlock(bx, by, bz);
-          if (id <= 0 || id === BLOCK.BEDROCK || isLiquid(id)) continue;
-          w.setBlock(bx, by, bz, BLOCK.AIR); // benachrichtigt Fluide/Fallphysik/Flora selbst
-          editListe.push([bx, by, bz, BLOCK.AIR]);
-          if (id === BLOCK.TNT) {
-            // Kettenreaktion: getroffenes TNT zündet mit kurzer Zufalls-Lunte
-            this.spawnPrimedTnt(bx, by, bz, 0.4 + Math.random() * 0.6);
+    // Blöcke im Kugelradius wegsprengen (Bedrock hält stand) — nur wenn
+    // mobGriefing an ist; sonst gibt es nur Schaden, keinen Krater.
+    if (Rules.mobGriefing) {
+      const iR = Math.ceil(radius);
+      const editListe = [];
+      for (let dy = -iR; dy <= iR; dy++) {
+        for (let dz = -iR; dz <= iR; dz++) {
+          for (let dx = -iR; dx <= iR; dx++) {
+            if (dx * dx + dy * dy + dz * dz > radius * radius) continue;
+            const bx = Math.floor(cx + dx), by = Math.floor(cy + dy), bz = Math.floor(cz + dz);
+            const id = w.getBlock(bx, by, bz);
+            if (id <= 0 || id === BLOCK.BEDROCK || isLiquid(id)) continue;
+            w.setBlock(bx, by, bz, BLOCK.AIR); // benachrichtigt Fluide/Fallphysik/Flora selbst
+            editListe.push([bx, by, bz, BLOCK.AIR]);
+            if (id === BLOCK.TNT) {
+              // Kettenreaktion: getroffenes TNT zündet mit kurzer Zufalls-Lunte
+              this.spawnPrimedTnt(bx, by, bz, 0.4 + Math.random() * 0.6);
+            }
           }
         }
       }
+      this.ctx.net?.sendEdits(editListe); // Krater für alle Mitspieler
     }
-    this.ctx.net?.sendEdits(editListe); // Krater für alle Mitspieler
 
     // Schaden: Spieler (mit Abstand skaliert) + andere Mobs
     const dmgRange = radius + 2.5;
@@ -966,8 +976,8 @@ export class EntityManager {
     const ground = world.getBlock(x, y, z);
     const openAbove = world.getBlock(x, y + 1, z) === BLOCK.AIR && world.getBlock(x, y + 2, z) === BLOCK.AIR;
 
-    // Sumpf: böse Schleime, die herumhüpfen (Tag wie Nacht)
-    if (biomeAt(this.ctx.seed, x, z) === 'sumpf' && Math.random() < 0.4) {
+    // Sumpf: böse Schleime, die herumhüpfen (Tag wie Nacht) — zählen als Monster
+    if (Rules.spawnMonsters && biomeAt(this.ctx.seed, x, z) === 'sumpf' && Math.random() < 0.4) {
       if (!openAbove || !isSolid(ground)) return;
       let slimes = 0;
       for (const e of this.list) if (e.type === 'slime') slimes++;
@@ -976,6 +986,7 @@ export class EntityManager {
     }
 
     if (daynight.isNight()) {
+      if (!Rules.spawnMonsters) return;
       // Nacht: Monster überall, wo Platz ist
       let type, cap;
       const r = Math.random();
@@ -987,6 +998,7 @@ export class EntityManager {
       return;
     }
     // Tag: Fische im Wasser; Weidetiere (Schwein/Schaf/Huhn) nur auf Gras in sinnvollen Biomen
+    if (!Rules.spawnAnimals) return;
     if (isWaterId(ground)) {
       if (!isWaterId(world.getBlock(x, y - 2, z))) return; // braucht eine Wassersäule
       if (this._countType('fish') >= FISH_CAP * capScale) return;
@@ -1005,6 +1017,7 @@ export class EntityManager {
   // Monster in stockdunklen Tiefen (Höhlen & Dungeons) — Tag wie Nacht.
   // Mehrere Stichproben pro Tick, weil Hohlräume nur einen Bruchteil des Gesteins ausmachen.
   _attemptCaveSpawn(anchor, capScale) {
+    if (!Rules.spawnMonsters) return;
     const { world } = this.ctx;
     const player = { pos: anchor };
     let monster = 0;
@@ -1872,10 +1885,14 @@ export class EntityManager {
             wantSpeed = 3.5;
             if (ai.timer <= 0) { ai.mode = 'idle'; ai.timer = 1 + Math.random() * 2; }
           } else {
-            wantSpeed = this._wander(e, dt, e.type === 'sheep' ? 1.1 : 1.4);
+            // Dorfbewohner gehen ihrem Beruf nach (Bauer/Holzfäller); sonst normal streifen
+            let jobSpeed = -1;
+            if (e.type === 'villager' && !e.baby) jobSpeed = this._villagerJob(e, dt);
+            wantSpeed = jobSpeed >= 0 ? jobSpeed : this._wander(e, dt, e.type === 'sheep' ? 1.1 : 1.4);
           }
-          // Dorfbewohner bleiben in der Nähe ihres Dorfs (Leine ans Zentrum)
-          if (e.type === 'villager' && e.home) {
+          // Dorfbewohner bleiben in der Nähe ihres Dorfs (Leine ans Zentrum) — außer sie
+          // sind gerade auf dem Weg zu einer Arbeitsstelle
+          if (e.type === 'villager' && e.home && !e.jobTarget) {
             const hx = e.home.x - e.pos.x, hz = e.home.z - e.pos.z, hd = Math.hypot(hx, hz);
             if (hd > 22) { ai.dirX = hx / hd; ai.dirZ = hz / hd; wantSpeed = Math.max(wantSpeed, 1.3); }
           }
@@ -1960,8 +1977,15 @@ export class EntityManager {
       for (let i = 0; i < e.legs.length; i++) {
         e.legs[i].rotation.x = i % 2 === 0 ? swing : -swing;
       }
-      for (let i = 0; i < e.arms.length; i++) {
-        e.arms[i].rotation.x = Math.sin(e.animPhase * 0.7) * 0.1;
+      if (e._workAnim) {
+        // Dorfbewohner bei der Arbeit: kräftiger Hack-/Hau-Schwung mit beiden Armen
+        e._workPhase = (e._workPhase || 0) + dt * 9;
+        const chop = -1.35 * (0.5 + 0.5 * Math.sin(e._workPhase));
+        for (let i = 0; i < e.arms.length; i++) e.arms[i].rotation.x = chop;
+      } else {
+        for (let i = 0; i < e.arms.length; i++) {
+          e.arms[i].rotation.x = Math.sin(e.animPhase * 0.7) * 0.1;
+        }
       }
     }
 
@@ -1987,6 +2011,144 @@ export class EntityManager {
       }
     }
     return ai.mode === 'walk' ? speed : 0;
+  }
+
+  // ---- Dorfbewohner-Berufe (nur host-autoritativ; Block-Edits werden gespiegelt) ----
+
+  // Block setzen + Nachbar-Effekte + im Mehrspieler an alle verteilen.
+  _hostEdit(x, y, z, id) {
+    const w = this.ctx.world;
+    const old = w.getBlock(x, y, z);
+    if (old === -1 || old === id) return;
+    w.setBlock(x, y, z, id);
+    this.ctx.onBlockEdit?.(x, y, z, id, old);
+    this.ctx.net?.sendEdits?.([[x, y, z, id]]);
+  }
+
+  // Beruf abarbeiten. Rückgabe: Wunschtempo (setzt ai.dirX/dirZ) oder -1 = kein Beruf → streifen.
+  _villagerJob(e, dt) {
+    e._workAnim = false;
+    if (e.job == null || e.job === 'roam') return -1;
+    const ai = e.ai;
+    if (e.jobTarget && !this._jobValid(e.jobTarget)) { e.jobTarget = null; e.workT = 0; }
+    if (!e.jobTarget) {
+      e.jobCd -= dt;
+      if (e.jobCd > 0) return -1;                 // Pause → normal umherstreifen
+      e.jobCd = 4 + Math.random() * 6;
+      e.jobTarget = this._findJob(e);
+      if (!e.jobTarget) return -1;
+      e._jobWalkT = 0;
+    }
+    const t = e.jobTarget;
+    const dx = (t.x + 0.5) - e.pos.x, dz = (t.z + 0.5) - e.pos.z;
+    const d = Math.hypot(dx, dz);
+    if (d > 1.7) {                                 // zum Ziel laufen
+      ai.dirX = dx / (d || 1); ai.dirZ = dz / (d || 1);
+      e._jobWalkT = (e._jobWalkT || 0) + dt;
+      if (e._jobWalkT > 12) { e.jobTarget = null; e.jobCd = 3; return -1; } // nicht erreichbar → aufgeben
+      return 1.5;
+    }
+    // am Ziel: stehen, Ziel anschauen, arbeiten (Arm-Animation + Partikel + Ton)
+    ai.dirX = 0; ai.dirZ = 0;
+    e.yaw = Math.atan2(dx, dz);
+    e._workAnim = true;
+    e.workT += dt;
+    e._workPT = (e._workPT || 0) - dt;
+    if (e._workPT <= 0) {
+      e._workPT = 0.4;
+      const col = e.job === 'farmer' ? { r: 0.5, g: 0.78, b: 0.28 } : { r: 0.52, g: 0.37, b: 0.2 };
+      this.ctx.furnaces?.burst(t.x + 0.5, t.y + 0.45, t.z + 0.5, 5, col);
+      this.ctx.sounds?.blockBreak?.();
+    }
+    if (e.workT >= 1.5) {                           // fertig → Aktion ausführen
+      this._doJob(e, t);
+      e.jobTarget = null; e.workT = 0; e._workAnim = false;
+      e.jobCd = 2 + Math.random() * 4;
+    }
+    return 0;
+  }
+
+  _jobValid(t) {
+    const w = this.ctx.world;
+    const id = w.getBlock(t.x, t.y, t.z);
+    if (id === -1) return true;                     // Chunk gerade nicht geladen → Ziel behalten
+    if (t.action === 'harvest') return !!BLOCKS[id]?.crop?.mature;
+    if (t.action === 'plant') return id === BLOCK.AIR && !!BLOCKS[w.getBlock(t.x, t.y - 1, t.z)]?.farmland;
+    if (t.action === 'chop') return isLogId(id) || isLogId(w.getBlock(t.x, t.y + 1, t.z));
+    return false;
+  }
+
+  // Nahe Arbeitsstelle suchen (kleiner Kasten um den Dorfbewohner).
+  _findJob(e) {
+    const w = this.ctx.world;
+    const bx = Math.floor(e.pos.x), by = Math.floor(e.pos.y), bz = Math.floor(e.pos.z);
+    const R = 9;
+    let best = null, bestD = Infinity;
+    if (e.job === 'farmer') {
+      let plant = null;
+      for (let x = bx - R; x <= bx + R; x++) for (let z = bz - R; z <= bz + R; z++)
+        for (let y = by - 2; y <= by + 2; y++) {
+          const id = w.getBlock(x, y, z);
+          if (id <= 0) continue;
+          if (BLOCKS[id]?.crop?.mature) {
+            const dd = (x - bx) ** 2 + (z - bz) ** 2;
+            if (dd < bestD) { bestD = dd; best = { x, y, z, action: 'harvest' }; }
+          } else if (!plant && id === BLOCK.AIR && BLOCKS[w.getBlock(x, y - 1, z)]?.farmland
+            && w.getBlock(x, y + 1, z) === BLOCK.AIR) {
+            plant = { x, y, z, action: 'plant' };
+          }
+        }
+      return best || plant;                          // Ernte hat Vorrang vor Pflanzen
+    }
+    // Holzfäller: nächster Baum-Stamm (Laub/Stamm darüber → kein platzierter Einzelblock)
+    for (let x = bx - R; x <= bx + R; x++) for (let z = bz - R; z <= bz + R; z++)
+      for (let y = by - 2; y <= by + 3; y++) {
+        if (!isLogId(w.getBlock(x, y, z))) continue;
+        const up = w.getBlock(x, y + 1, z);
+        if (!(isLogId(up) || isLeafId(up))) continue;
+        const dd = (x - bx) ** 2 + (z - bz) ** 2;
+        if (dd < bestD) { bestD = dd; best = { x, y, z, action: 'chop' }; }
+      }
+    return best;
+  }
+
+  // Aktion am Ziel ausführen (Ernten/Pflanzen/Fällen) — alle Edits synchronisiert.
+  _doJob(e, t) {
+    const w = this.ctx.world;
+    if (t.action === 'harvest') {
+      const cd = BLOCKS[w.getBlock(t.x, t.y, t.z)]?.crop;
+      if (cd?.mature) {
+        this.dropSynced(t.x + 0.5, t.y + 0.4, t.z + 0.5, cd.produce, 1 + (Math.random() * 2 | 0));
+        if (cd.seed !== cd.produce && Math.random() < 0.6) this.dropSynced(t.x + 0.5, t.y + 0.5, t.z + 0.5, cd.seed, 1);
+        this._hostEdit(t.x, t.y, t.z, cd.first);     // gleich neu bepflanzen (Stufe 0)
+      }
+    } else if (t.action === 'plant') {
+      if (w.getBlock(t.x, t.y, t.z) === BLOCK.AIR && BLOCKS[w.getBlock(t.x, t.y - 1, t.z)]?.farmland) {
+        const seeds = [BLOCK.WHEAT_0, BLOCK.CARROT_0, BLOCK.POTATO_0];
+        this._hostEdit(t.x, t.y, t.z, seeds[e.eid % 3]);
+      }
+    } else if (t.action === 'chop') {
+      // obersten Stamm der Säule fällen (kein schwebendes Holz)
+      let ty = t.y;
+      while (isLogId(w.getBlock(t.x, ty + 1, t.z))) ty++;
+      const logId = w.getBlock(t.x, ty, t.z);
+      if (isLogId(logId)) {
+        this.dropSynced(t.x + 0.5, ty + 0.5, t.z + 0.5, logId, 1);
+        this._hostEdit(t.x, ty, t.z, BLOCK.AIR);
+      }
+      if (!isLogId(w.getBlock(t.x, t.y, t.z))) this._plantSapling(t.x, t.y, t.z); // Stamm weg → Nachwuchs
+    }
+  }
+
+  _plantSapling(x, y, z) {
+    const w = this.ctx.world;
+    let gy = y;
+    while (gy > y - 3 && w.getBlock(x, gy - 1, z) === BLOCK.AIR) gy--; // Boden unter der Basis suchen
+    const below = w.getBlock(x, gy - 1, z);
+    if ((below === BLOCK.GRASS || below === BLOCK.DIRT) && w.getBlock(x, gy, z) === BLOCK.AIR) {
+      this._hostEdit(x, gy, z, BLOCK.SAPLING);
+      this.ctx.flora?.addSapling?.(x, gy, z);
+    }
   }
 
   _updateItem(e, dt) {

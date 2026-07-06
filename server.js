@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
+import { Rules } from './config.js'; // Welt-Regeln des Servers → an Gäste verteilen
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -375,6 +376,7 @@ wss.on('connection', (ws, req) => {
       const gespeichert = welt.players[ip + '|' + name];
       sende(ws, {
         type: 'welcome', id, hostId, seed: welt.seed, time: welt.time, pvp: pvpAn, mod,
+        rules: Rules, // Welt-Regeln des Servers (Gäste übernehmen sie)
         edits: welt.edits, chests: welt.chests,
         playerState: gespeichert ? gespeichert.state : null,
         players: [...spieler.values()].filter((p) => p.id !== id),

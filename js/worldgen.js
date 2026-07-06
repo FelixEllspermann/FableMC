@@ -657,6 +657,11 @@ export function generateChunkData(cx, cz, seed) {
             data[blockIndex(lx, surf + i, lz)] = BLOCK.KELP;
           }
         }
+        // Verstreute Kiesel auf dem Meeresboden (wo über dem Grund noch Wasser steht)
+        if (data[blockIndex(lx, surf + 1, lz)] === BLOCK.WATER &&
+            hash2(seed ^ 0x5eb0, x, z) < 0.05) {
+          data[blockIndex(lx, surf + 1, lz)] = BLOCK.PEBBLES_WET;
+        }
       }
     }
   }
@@ -1592,6 +1597,7 @@ function buildVillageLayout(seed, cx, cz, rng) {
     let type;
     if (buildings.length === 0) type = 'mill';
     else if (buildings.length === 1) type = 'blacksmith';
+    else if (buildings.length === 3 || buildings.length === 8) type = 'field'; // 1–2 Felder für die Bauern
     else type = rng() < 0.4 ? 'house_large' : 'house_small';
     const tdx = cx - ax, tdz = cz - az; // Tür/Front zeigt zum Zentrum
     const dir = Math.abs(tdx) >= Math.abs(tdz) ? (tdx >= 0 ? 'E' : 'W') : (tdz >= 0 ? 'S' : 'N');
@@ -1729,6 +1735,28 @@ function writeVillageWell(data, ox, oz, cx, cz, surf) {
   for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) put(cx + dx, surf + 4, cz + dz, BLOCK.PLANK_SLAB); // Dach
 }
 
+// Dorf-Feld: 7×5 Ackerland mit Wasserrinne in der Mitte und Feldfrüchten in
+// zufälligen Wachstumsstufen (manche reif) — Arbeitsplatz für die Bauern.
+const FIELD_CROPS = [
+  [BLOCK.WHEAT_0, BLOCK.WHEAT_1, BLOCK.WHEAT_2, BLOCK.WHEAT_3],
+  [BLOCK.CARROT_0, BLOCK.CARROT_1, BLOCK.CARROT_2, BLOCK.CARROT_3],
+  [BLOCK.POTATO_0, BLOCK.POTATO_1, BLOCK.POTATO_2, BLOCK.POTATO_3],
+];
+function writeField(data, ox, oz, b, seed) {
+  const put = villagePut(data, ox, oz);
+  const { ax, az, surf } = b;
+  const hw = 3, hd = 2;
+  villageBase(put, ax, az, surf, hw, hd, BLOCK.DIRT, 4); // Fläche freiräumen + Fundament
+  for (let dx = -hw; dx <= hw; dx++) for (let dz = -hd; dz <= hd; dz++) {
+    // schmale Wasserrinne in der Mittelreihe (Enden bleiben Ackerland → läuft nicht aus)
+    if (dz === 0 && dx > -hw && dx < hw) { put(ax + dx, surf, az + dz, BLOCK.WATER); continue; }
+    put(ax + dx, surf, az + dz, BLOCK.FARMLAND_WET);
+    const kind = Math.floor(hash2(seed ^ 0xfa2e, ax + dx, az + dz) * 3) % 3;
+    const stage = Math.floor(hash2(seed ^ 0xfa1d, (ax + dx) * 7, (az + dz) * 13) * 4); // 0..3, manche reif
+    put(ax + dx, surf + 1, az + dz, FIELD_CROPS[kind][Math.min(3, stage)]);
+  }
+}
+
 const VILLAGE_CLEAR = new Set([
   BLOCK.LEAVES, BLOCK.BIRCH_LEAVES, BLOCK.SPRUCE_LEAVES, BLOCK.LOG, BLOCK.BIRCH_LOG,
   BLOCK.SPRUCE_LOG, BLOCK.JUNGLE_LOG, BLOCK.VINE, BLOCK.JUNGLE_BUSH,
@@ -1752,6 +1780,7 @@ function writeVillage(data, ox, oz, v, seed) {
     if (b.ax + hs < ox || b.ax - hs > ox + 15 || b.az + hs < oz || b.az - hs > oz + 15) continue;
     if (b.type === 'mill') writeMill(data, ox, oz, b, seed);
     else if (b.type === 'blacksmith') writeBlacksmith(data, ox, oz, b, seed);
+    else if (b.type === 'field') writeField(data, ox, oz, b, seed);
     else writeHouse(data, ox, oz, b, seed, b.type === 'house_large');
   }
 }
