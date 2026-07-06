@@ -1,0 +1,16 @@
+# Abhängigkeiten (Electron ist ~370 MB) — via `npm install` wiederherstellbar
+node_modules/
+
+# Laufzeit-/Weltdaten (pro Instanz, gehören nicht ins Repo)
+worlds/
+world-mp.json
+bans.json
+mods.json
+
+# Werkzeug-, Editor- und OS-Dateien
+.claude/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log

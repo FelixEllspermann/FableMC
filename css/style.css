@@ -1,0 +1,14 @@
+/* Base reset only — every UI module injects its own scoped <style>. */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body {
+  background: #000;
+  font-family: 'Courier New', ui-monospace, monospace;
+  color: #fff;
+  user-select: none;
+  -webkit-user-select: none;
+}
+canvas { display: block; }
+img { image-rendering: pixelated; }
+button { font-family: inherit; cursor: pointer; }
+input { font-family: inherit; }

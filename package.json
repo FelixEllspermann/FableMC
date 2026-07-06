@@ -1,0 +1,19 @@
+{
+  "name": "fable-mc",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Minecraft-like voxel game — Three.js, no build step. Serve statically and open in a browser.",
+  "scripts": {
+    "start": "npx --yes http-server -p 8123 -c-1 .",
+    "mp": "node server.js",
+    "launcher": "node launcher.js",
+    "app": "electron electron-main.cjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^43.0.0"
+  }
+}
