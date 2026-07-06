@@ -3,6 +3,8 @@
 import { SaveManager } from './save.js';
 import { biomeAt, columnInfo } from './worldgen.js';
 import { Settings } from './settings.js';
+import { t, getLang, setLang, onLangChange, randomSplash, LANG_NAMES } from './lang.js';
+import { Keybinds, KEYBIND_ACTIONS, keyLabel } from './keybinds.js';
 import { Rules } from '../config.js';
 import {
   VOXEL_DETAIL_CAP, CHUNK_SIZE, BLOCKS, ITEMS, isBlockId, nameOf,
@@ -20,7 +22,8 @@ const MOB_NAMES = {
 
 export const BIOME_NAMES = {
   ozean: 'Ozean', see: 'See', strand: 'Strand', ebene: 'Ebene', wald: 'Wald',
-  birkenwald: 'Birkenwald', tannenwald: 'Tannenwald', blumenwiese: 'Blumenwiese',
+  birkenwald: 'Birkenwald', old_birch: 'Alter Birkenwald', tannenwald: 'Tannenwald',
+  spruce_valley: 'Fichtental', blumenwiese: 'Blumenwiese',
   sumpf: 'Sumpf', wueste: 'Wüste', savanne: 'Savanne', badlands: 'Badlands',
   dschungel: 'Dschungel',
   schneelandschaft: 'Schneelandschaft', schneewald: 'Schneewald', pilzinsel: 'Pilzinsel',
@@ -89,7 +92,8 @@ const STYLE = `
 .ui-overlay.open { display: flex; }
 .ui-pause { background: rgba(0, 0, 0, 0.6); }
 .ui-title {
-  background: linear-gradient(#2c3e66, #141a2e);
+  /* halbtransparent, damit die langsam rotierende Welt dahinter durchscheint */
+  background: linear-gradient(rgba(28, 40, 78, 0.5), rgba(12, 16, 30, 0.78));
 }
 .ui-panel { display: flex; flex-direction: column; gap: 12px; align-items: center; }
 .ui-screen { display: flex; flex-direction: column; gap: 12px; align-items: center; }
@@ -98,6 +102,15 @@ const STYLE = `
   text-shadow: 4px 4px 0 #26418c, 6px 6px 0 rgba(0,0,0,0.5);
 }
 .ui-sub { color: #ffe25e; font-size: 15px; margin-bottom: 20px; text-shadow: 2px 2px 0 #3f3f00; }
+.ui-splash {
+  display: inline-block; font-weight: bold; font-size: 17px;
+  transform: rotate(-6deg); transform-origin: center;
+  animation: ui-splash-pulse 0.95s ease-in-out infinite;
+}
+@keyframes ui-splash-pulse {
+  0%, 100% { transform: rotate(-6deg) scale(1); }
+  50% { transform: rotate(-6deg) scale(1.07); }
+}
 .ui-btn {
   font-size: 19px; padding: 10px 0; width: 320px; text-align: center;
   background: #6d6d6d; color: #fff; text-shadow: 2px 2px 0 #3f3f3f;
@@ -112,9 +125,6 @@ const STYLE = `
   font-size: 17px; padding: 9px 12px; width: 296px; background: #000; color: #e0e0e0;
   border: 2px solid #a8a8a8; outline: none;
 }
-.ui-controls {
-  margin-top: 26px; color: #b8c2e0; font-size: 13px; line-height: 1.7; text-align: center;
-}
 .ui-pause h1 { font-size: 40px; color: #fff; margin-bottom: 18px; text-shadow: 3px 3px 0 #222; }
 .ui-loading {
   position: fixed; inset: 0; z-index: 58; display: none; align-items: center;
@@ -122,27 +132,41 @@ const STYLE = `
 }
 .ui-loading.open { display: flex; }
 .ui-settings { z-index: 66; background: rgba(0, 0, 0, 0.72); }
-.ui-settings .ui-panel { position: relative; background: #2a2f45; padding: 26px 34px; border: 2px solid #555d80; border-radius: 4px; }
+.ui-settings .ui-panel {
+  position: relative; background: #2a2f45; padding: 20px 34px; border: 2px solid #555d80;
+  border-radius: 4px; max-height: 90vh; overflow-y: auto; gap: 9px;
+}
 .ui-set-close {
-  position: absolute; top: 6px; right: 8px; width: 30px; height: 30px;
+  position: sticky; top: 0; align-self: flex-end; margin-right: -18px; width: 30px; height: 30px;
   font-size: 17px; line-height: 1; padding: 0; background: #3a4060; color: #cfd6f0;
-  border: 1px solid #555d80;
+  border: 1px solid #555d80; z-index: 2;
 }
 .ui-set-close:hover { background: #9d5f5f; color: #fff; }
-.ui-settings h1 { font-size: 30px; color: #fff; margin-bottom: 4px; text-shadow: 2px 2px 0 #14172a; }
+.ui-settings h1 { font-size: 30px; color: #fff; margin: -14px 0 2px; text-shadow: 2px 2px 0 #14172a; }
 .ui-set-label { color: #fff; font-size: 17px; }
 .ui-set-slider { width: 320px; accent-color: #79c05a; cursor: pointer; }
 .ui-set-hint { color: #9aa4c4; font-size: 12.5px; max-width: 340px; text-align: center; line-height: 1.5; }
+.ui-set-section {
+  color: #9fb0ff; font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
+  margin-top: 12px; padding-bottom: 3px; border-bottom: 1px solid #454d70; width: 344px; text-align: center;
+}
+.ui-set-fps { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; width: 344px; }
+.ui-set-fps .ui-btn { width: auto; font-size: 13px; padding: 6px 12px; }
+.ui-set-fps .ui-btn.sel { background: #5a7a4a; border-color: #8fd070 #2f3f22 #2f3f22 #8fd070; }
+.ui-key-row {
+  display: flex; align-items: center; justify-content: space-between; width: 344px; gap: 12px;
+}
+.ui-key-row > span { color: #e2e6f5; font-size: 15px; }
+.ui-key-btn {
+  min-width: 104px; padding: 5px 10px; font-size: 14px; text-align: center; color: #fff;
+  background: #46506f; border: 2px solid; border-color: #6d78a0 #2a2f45 #2a2f45 #6d78a0;
+}
+.ui-key-btn:hover { background: #566188; }
+.ui-key-btn.listening { background: #7a6a2f; color: #ffe25e; border-color: #c9b25a #3a3110 #3a3110 #c9b25a; }
 .ui-biomes-grid { display: grid; grid-template-columns: repeat(3, 150px); gap: 6px; }
 .ui-biomes-grid .ui-btn { width: auto; font-size: 14px; padding: 8px 4px; }
 .ui-biomes-status { color: #ffe25e; font-size: 14px; min-height: 18px; text-align: center; }
 `;
-
-const CONTROLS_TEXT =
-  'WASD Bewegen · Leertaste Springen/Schwimmen · Strg/2×W Sprinten · Shift Schleichen\n' +
-  'Linksklick Abbauen/Angreifen · Rechtsklick Platzieren/Essen/Werkbank\n' +
-  'E Inventar · 1–9 / Mausrad Hotbar · F3 Debug · Esc Pause\n' +
-  'Kreativ: 2×Leertaste Fliegen (Leertaste/Shift hoch/runter) · B Biom-Teleport · F4 Spectator';
 
 export class UI {
   constructor(ctx) {
@@ -150,6 +174,9 @@ export class UI {
     this._fps = 60;
     this._debugTimer = 0;
     this._toastTimer = null;
+    // i18n: registrierte Closures, die ihren Text bei Sprachwechsel neu setzen
+    this._i18nUpdaters = [];
+    onLangChange(() => this._applyLang());
 
     const style = document.createElement('style');
     style.textContent = STYLE;
@@ -177,31 +204,31 @@ export class UI {
     bossTrack.appendChild(this.bossFill);
     this.bossEl.appendChild(this.bossName); this.bossEl.appendChild(bossTrack);
     this.loadingEl = this._el('div', 'ui-loading');
-    this.loadingEl.textContent = 'Welt wird generiert…';
+    this._reg(() => { this.loadingEl.textContent = t('loading.world'); });
 
     // pause menu
     this.pauseEl = this._el('div', 'ui-overlay ui-pause');
     const pausePanel = this._el('div', 'ui-panel');
     const ph = document.createElement('h1');
-    ph.textContent = 'Pause';
+    this._reg(() => { ph.textContent = t('pause.title'); });
     pausePanel.appendChild(ph);
-    const btnResume = this._btn('Weiterspielen', () => {
+    const btnResume = this._btnT('pause.resume', () => {
       this.hidePause();
       this.ctx.requestLock();
     });
-    const btnSave = this._btn('Speichern', () => {
+    const btnSave = this._btnT('pause.save', () => {
       this.ctx.save.save();
-      this.toast('Gespeichert');
+      this.toast(t('pause.saved'));
     });
     pausePanel.appendChild(btnResume);
     pausePanel.appendChild(btnSave);
-    pausePanel.appendChild(this._btn('Einstellungen', () => this.showSettings()));
-    this.pauseBiomeBtn = this._btn('Biom-Teleport', () => {
+    pausePanel.appendChild(this._btnT('menu.settings', () => this.showSettings()));
+    this.pauseBiomeBtn = this._btnT('pause.biome', () => {
       this.hidePause();
       this.showBiomeMenu();
     });
     pausePanel.appendChild(this.pauseBiomeBtn);
-    pausePanel.appendChild(this._btn('Zurück zum Hauptmenü', () => this._backToMenu(), 'ui-btn-quit'));
+    pausePanel.appendChild(this._btnT('pause.mainMenu', () => this._backToMenu(), 'ui-btn-quit'));
     this.pauseEl.appendChild(pausePanel);
 
     this._buildSettings();
@@ -230,6 +257,22 @@ export class UI {
     return b;
   }
 
+  // i18n: fn sofort ausführen und für spätere Sprachwechsel merken
+  _reg(fn) { fn(); this._i18nUpdaters.push(fn); return fn; }
+
+  _applyLang() {
+    for (const fn of this._i18nUpdaters) {
+      try { fn(); } catch { /* abgelöste Knoten o. Ä. — nie fatal */ }
+    }
+  }
+
+  // Übersetzter Button: Beschriftung folgt automatisch der Sprache
+  _btnT(key, onClick, cls = '') {
+    const b = this._btn(t(key), onClick, cls);
+    this._reg(() => { b.textContent = t(key); });
+    return b;
+  }
+
   // ---- settings ----
 
   _buildSettings() {
@@ -242,7 +285,7 @@ export class UI {
     const close = document.createElement('button');
     close.className = 'ui-set-close';
     close.textContent = '✕';
-    close.title = 'Schließen';
+    this._reg(() => { close.title = t('set.close'); });
     close.addEventListener('click', () => this.hideSettings());
     panel.appendChild(close);
     this.settingsEl.addEventListener('mousedown', (e) => {
@@ -251,69 +294,142 @@ export class UI {
     document.addEventListener('keydown', (e) => {
       if (e.code === 'Escape' && this.settingsEl.classList.contains('open')) {
         e.stopImmediatePropagation();
+        if (this._rebinding) { this._rebinding.cancel(); return; } // Esc bricht Tastenbelegung ab
         this.hideSettings();
       }
     }, true);
 
     const h1 = document.createElement('h1');
-    h1.textContent = 'Einstellungen';
+    this._reg(() => { h1.textContent = t('set.title'); });
     panel.appendChild(h1);
 
-    const label = document.createElement('div');
-    label.className = 'ui-set-label';
-    const updateLabel = () => {
-      const v = Settings.renderDistance;
-      label.textContent = `Sichtweite: ${v} Chunks (${v * 16} Blöcke)`;
+    // ---- lokale Baukästen ----
+    const addSection = (key) => {
+      const d = document.createElement('div');
+      d.className = 'ui-set-section';
+      this._reg(() => { d.textContent = t(key); });
+      panel.appendChild(d);
     };
-    updateLabel();
-    panel.appendChild(label);
-
-    const slider = document.createElement('input');
-    slider.type = 'range';
-    slider.min = '5';
-    slider.max = '36';
-    slider.step = '1';
-    slider.value = String(Settings.renderDistance);
-    slider.className = 'ui-set-slider';
-    slider.addEventListener('input', () => {
-      Settings.renderDistance = Number(slider.value);
-      Settings.save();
-      updateLabel();
-    });
-    panel.appendChild(slider);
-
-    const hint = document.createElement('div');
-    hint.className = 'ui-set-hint';
-    hint.textContent =
-      `Bis ${VOXEL_DETAIL_CAP} Chunks volle Voxel-Details — darüber wird entferntes Gelände ` +
-      'vereinfacht dargestellt (Höhenprofil mit Biomfarben). Sehr hohe Werte kosten Leistung. ' +
-      'Wirkt sofort, ohne Neustart.';
-    panel.appendChild(hint);
-
-    // Lauftempo im Kreativmodus (1x .. 3x)
-    const speedLabel = document.createElement('div');
-    speedLabel.className = 'ui-set-label';
-    const updateSpeedLabel = () => {
-      speedLabel.textContent = `Lauftempo im Kreativmodus: ×${Settings.creativeSpeed.toFixed(2).replace(/\.?0+$/, '')}`;
+    const addLabel = (fn) => {
+      const d = document.createElement('div');
+      d.className = 'ui-set-label';
+      const upd = () => { d.textContent = fn(); };
+      this._reg(upd);
+      panel.appendChild(d);
+      return upd; // Rückgabe: erlaubt sofortiges Auffrischen bei Wert-Änderung
     };
-    updateSpeedLabel();
-    panel.appendChild(speedLabel);
+    const addHint = (key, ...args) => {
+      const d = document.createElement('div');
+      d.className = 'ui-set-hint';
+      this._reg(() => { d.textContent = t(key, ...args); });
+      panel.appendChild(d);
+    };
+    const addToggle = (getFn, setFn) => {
+      const refresh = () => { b.textContent = t(getFn() ? 'set.on' : 'set.off'); };
+      const b = this._btn('', () => { setFn(!getFn()); refresh(); });
+      this._reg(refresh);
+      panel.appendChild(b);
+      return b;
+    };
+    const addSlider = (min, max, step, getFn, setFn) => {
+      const s = document.createElement('input');
+      s.type = 'range'; s.min = String(min); s.max = String(max); s.step = String(step);
+      s.value = String(getFn()); s.className = 'ui-set-slider';
+      s.addEventListener('input', () => setFn(Number(s.value)));
+      panel.appendChild(s);
+      return s;
+    };
 
-    const speedSlider = document.createElement('input');
-    speedSlider.type = 'range';
-    speedSlider.min = '1';
-    speedSlider.max = '3';
-    speedSlider.step = '0.25';
-    speedSlider.value = String(Settings.creativeSpeed);
-    speedSlider.className = 'ui-set-slider';
-    speedSlider.addEventListener('input', () => {
-      Settings.creativeSpeed = Number(speedSlider.value);
-      Settings.save();
-      updateSpeedLabel();
+    // ── Sprache ──
+    addSection('set.language');
+    const langBtn = this._btn(LANG_NAMES[getLang()], () => setLang(getLang() === 'de' ? 'en' : 'de'));
+    this._reg(() => { langBtn.textContent = LANG_NAMES[getLang()]; });
+    panel.appendChild(langBtn);
+
+    // ── Grafik ──
+    addSection('set.sec.graphics');
+    const updRender = addLabel(() => t('set.renderDistance', Settings.renderDistance, Settings.renderDistance * 16));
+    addSlider(5, 36, 1, () => Settings.renderDistance, (v) => {
+      Settings.renderDistance = v; Settings.save(); updRender();
     });
-    panel.appendChild(speedSlider);
+    addHint('set.renderHint', VOXEL_DETAIL_CAP);
+    addLabel(() => t('set.clouds'));
+    addToggle(() => Settings.clouds, (v) => { Settings.clouds = v; Settings.save(); });
+    const updSpeed = addLabel(() => t('set.creativeSpeed', Settings.creativeSpeed.toFixed(2).replace(/\.?0+$/, '')));
+    addSlider(1, 3, 0.25, () => Settings.creativeSpeed, (v) => {
+      Settings.creativeSpeed = v; Settings.save(); updSpeed();
+    });
 
-    panel.appendChild(this._btn('Fertig', () => this.hideSettings()));
+    // ── Leistung ──
+    addSection('set.sec.performance');
+    const updFps = addLabel(() => t('set.maxFps', Settings.maxFps === 0 ? t('set.unlimited') : Settings.maxFps));
+    const fpsRow = document.createElement('div');
+    fpsRow.className = 'ui-set-fps';
+    const fpsBtns = [];
+    const refreshFps = () => { for (const x of fpsBtns) x.b.classList.toggle('sel', Settings.maxFps === x.v); };
+    for (const v of [30, 60, 90, 120, 144, 0]) {
+      const b = document.createElement('button');
+      b.className = 'ui-btn';
+      this._reg(() => { b.textContent = v === 0 ? t('set.unlimited') : String(v); });
+      b.addEventListener('click', () => {
+        Settings.maxFps = v; Settings.save(); updFps(); refreshFps();
+      });
+      fpsBtns.push({ b, v });
+      fpsRow.appendChild(b);
+    }
+    refreshFps();
+    panel.appendChild(fpsRow);
+    addLabel(() => t('set.vsync'));
+    addToggle(() => Settings.vsync, (v) => { Settings.vsync = v; Settings.save(); });
+    addHint('set.vsyncHint');
+
+    // ── Steuerung ── (belegbare Tasten)
+    addSection('set.sec.controls');
+    addHint('set.rebindHint');
+    this._keyBtns = [];
+    for (const action of KEYBIND_ACTIONS) {
+      const row = document.createElement('div');
+      row.className = 'ui-key-row';
+      const name = document.createElement('span');
+      this._reg(() => { name.textContent = t('key.' + action); });
+      const keyBtn = document.createElement('button');
+      keyBtn.className = 'ui-key-btn';
+      const refreshKey = () => { keyBtn.textContent = keyLabel(Keybinds.get(action)); };
+      refreshKey();
+      keyBtn.addEventListener('click', () => this._startRebind(action, keyBtn));
+      row.appendChild(name);
+      row.appendChild(keyBtn);
+      panel.appendChild(row);
+      this._keyBtns.push({ action, refreshKey });
+    }
+    panel.appendChild(this._btnT('set.resetKeys', () => {
+      Keybinds.reset();
+      for (const k of this._keyBtns) k.refreshKey();
+    }));
+
+    panel.appendChild(this._btnT('set.done', () => this.hideSettings()));
+  }
+
+  // Tastenbelegung ändern: nächste gedrückte Taste wird zugewiesen (Esc bricht ab).
+  _startRebind(action, btn) {
+    if (this._rebinding) this._rebinding.cancel();
+    btn.classList.add('listening');
+    btn.textContent = t('set.rebindWait');
+    const finish = () => {
+      document.removeEventListener('keydown', onKey, true);
+      btn.classList.remove('listening');
+      this._rebinding = null;
+      for (const k of (this._keyBtns || [])) k.refreshKey();
+    };
+    const onKey = (e) => {
+      if (e.code === 'Escape') return; // Escape behandelt der Settings-Handler als Abbruch
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      Keybinds.set(action, e.code);
+      finish();
+    };
+    this._rebinding = { cancel: finish };
+    document.addEventListener('keydown', onKey, true);
   }
 
   showSettings() {
@@ -348,12 +464,12 @@ export class UI {
     }, true);
 
     const h1 = document.createElement('h1');
-    h1.textContent = 'Biom-Teleport';
+    this._reg(() => { h1.textContent = t('biome.title'); });
     panel.appendChild(h1);
 
     this.biomeStatus = document.createElement('div');
     this.biomeStatus.className = 'ui-biomes-status';
-    this.biomeStatus.textContent = 'Nächstes Vorkommen suchen und hinspringen:';
+    this._reg(() => { this.biomeStatus.textContent = t('biome.prompt'); });
     panel.appendChild(this.biomeStatus);
 
     const grid = document.createElement('div');
@@ -430,9 +546,10 @@ export class UI {
       const h1 = document.createElement('div');
       h1.className = 'ui-h1';
       h1.textContent = 'Fable MC';
+      // Zufälliger, lustiger Spruch (Minecraft-Stil) — wechselt bei jedem Start & Sprachwechsel
       const sub = document.createElement('div');
-      sub.className = 'ui-sub';
-      sub.textContent = 'Ein Minecraft-Klon — komplett prozedural';
+      sub.className = 'ui-sub ui-splash';
+      this._reg(() => { sub.textContent = randomSplash(); });
       panel.appendChild(h1);
       panel.appendChild(sub);
 
@@ -455,36 +572,37 @@ export class UI {
       };
 
       // ---- Hauptmenü ----
-      mainScreen.appendChild(this._btn('Einzelspieler', () => zeige(spScreen)));
-      mainScreen.appendChild(this._btn('Mehrspieler', () => zeige(mpScreen)));
-      mainScreen.appendChild(this._btn('Einstellungen', () => this.showSettings()));
+      mainScreen.appendChild(this._btnT('menu.singleplayer', () => zeige(spScreen)));
+      mainScreen.appendChild(this._btnT('menu.multiplayer', () => zeige(mpScreen)));
+      mainScreen.appendChild(this._btnT('menu.settings', () => this.showSettings()));
       // „Beenden" nur in der Desktop-App (Electron) — schließt das Fenster/die App.
       if (/electron/i.test(navigator.userAgent)) {
-        mainScreen.appendChild(this._btn('Beenden', () => window.close(), 'danger'));
+        mainScreen.appendChild(this._btnT('menu.quit', () => window.close(), 'danger'));
       }
 
       // ---- Einzelspieler ----
       const seedInput = document.createElement('input');
       seedInput.className = 'ui-seed';
-      seedInput.placeholder = 'Seed (leer = zufällig)';
+      this._reg(() => { seedInput.placeholder = t('sp.seedPlaceholder'); });
       spScreen.appendChild(seedInput);
       let gamemode = 'survival';
-      const modeBtn = this._btn('Spielmodus: Überleben', () => {
+      const modeBtn = this._btn(t('sp.modeSurvival'), () => {
         gamemode = gamemode === 'survival' ? 'creative' : 'survival';
-        modeBtn.textContent = gamemode === 'survival' ? 'Spielmodus: Überleben' : 'Spielmodus: Kreativ';
+        modeBtn.textContent = t(gamemode === 'survival' ? 'sp.modeSurvival' : 'sp.modeCreative');
       });
+      this._reg(() => { modeBtn.textContent = t(gamemode === 'survival' ? 'sp.modeSurvival' : 'sp.modeCreative'); });
       spScreen.appendChild(modeBtn);
-      spScreen.appendChild(this._btn('Neue Welt', () => finish('new', parseSeed(seedInput.value), gamemode)));
-      const btnLoad = this._btn('Welt fortsetzen', () => {
+      spScreen.appendChild(this._btnT('sp.newWorld', () => finish('new', parseSeed(seedInput.value), gamemode)));
+      const btnLoad = this._btnT('sp.continue', () => {
         const meta = SaveManager.readMeta();
         if (meta) finish('load', meta.seed, gamemode);
       });
-      const btnDelete = this._btn('Welt löschen', () => {
-        if (window.confirm('Gespeicherte Welt wirklich löschen?')) {
+      const btnDelete = this._btnT('sp.delete', () => {
+        if (window.confirm(t('sp.deleteConfirm'))) {
           SaveManager.clear();
           btnLoad.disabled = true;
           btnDelete.disabled = true;
-          this.toast('Welt gelöscht');
+          this.toast(t('sp.deleted'));
         }
       }, 'danger');
       if (!SaveManager.hasSave()) {
@@ -493,23 +611,23 @@ export class UI {
       }
       spScreen.appendChild(btnLoad);
       spScreen.appendChild(btnDelete);
-      spScreen.appendChild(this._btn('‹ Zurück', () => zeige(mainScreen)));
+      spScreen.appendChild(this._btnT('menu.back', () => zeige(mainScreen)));
 
       // ---- Mehrspieler ----
       const nameInput = document.createElement('input');
       nameInput.className = 'ui-seed';
-      nameInput.placeholder = 'Spielername';
+      this._reg(() => { nameInput.placeholder = t('mp.namePlaceholder'); });
       nameInput.maxLength = 20;
       mpScreen.appendChild(nameInput);
       const addrInput = document.createElement('input');
       addrInput.className = 'ui-seed';
-      addrInput.placeholder = 'Server-Adresse (leer = dieser Server)';
+      this._reg(() => { addrInput.placeholder = t('mp.addrPlaceholder'); });
       mpScreen.appendChild(addrInput);
-      mpScreen.appendChild(this._btn('Mehrspieler beitreten', () => {
+      mpScreen.appendChild(this._btnT('mp.join', () => {
         overlay.remove();
         resolve({
           mode: 'multiplayer', gamemode: 'survival',
-          name: nameInput.value.trim() || 'Spieler',
+          name: nameInput.value.trim() || t('mp.defaultName'),
           adresse: addrInput.value.trim(),
         });
       }));
@@ -520,27 +638,22 @@ export class UI {
         nameInput.value = letzter.name; // Felder vorbelegen
         addrInput.value = letzter.adresse || '';
       }
-      const btnRejoin = this._btn(
-        letzter && letzter.name
-          ? `Wieder verbinden (${letzter.name}${letzter.adresse ? ' @ ' + letzter.adresse : ''})`
-          : 'Wieder verbinden',
-        () => {
-          overlay.remove();
-          resolve({
-            mode: 'multiplayer', gamemode: 'survival',
-            name: letzter.name, adresse: letzter.adresse || '',
-          });
+      const rejoinLabel = () => (letzter && letzter.name
+        ? `${t('mp.rejoin')} (${letzter.name}${letzter.adresse ? ' @ ' + letzter.adresse : ''})`
+        : t('mp.rejoin'));
+      const btnRejoin = this._btn(rejoinLabel(), () => {
+        overlay.remove();
+        resolve({
+          mode: 'multiplayer', gamemode: 'survival',
+          name: letzter.name, adresse: letzter.adresse || '',
         });
+      });
+      this._reg(() => { btnRejoin.textContent = rejoinLabel(); });
       if (!(letzter && letzter.name)) btnRejoin.disabled = true;
       mpScreen.appendChild(btnRejoin);
-      mpScreen.appendChild(this._btn('‹ Zurück', () => zeige(mainScreen)));
+      mpScreen.appendChild(this._btnT('menu.back', () => zeige(mainScreen)));
 
       zeige(mainScreen); // Start im Hauptmenü
-
-      const controls = document.createElement('div');
-      controls.className = 'ui-controls';
-      controls.textContent = CONTROLS_TEXT;
-      panel.appendChild(controls);
     });
   }
 

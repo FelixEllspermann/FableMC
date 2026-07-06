@@ -277,7 +277,10 @@ export function buildChunkMesh(data, light, maxY, copyTop) {
           }
 
           const buf = isWater ? water : isLava ? lava : solid;
-          let tileName = n[1] > 0 ? (tiles.top ?? tiles.side) : n[1] < 0 ? (tiles.bottom ?? tiles.side) : tiles.side;
+          let tileName;
+          if (def.logAxis === 'x') tileName = n[0] !== 0 ? tiles.top : tiles.side;      // Stirnholz an den X-Enden
+          else if (def.logAxis === 'z') tileName = n[2] !== 0 ? tiles.top : tiles.side;  // Stirnholz an den Z-Enden
+          else tileName = n[1] > 0 ? (tiles.top ?? tiles.side) : n[1] < 0 ? (tiles.bottom ?? tiles.side) : tiles.side;
           if (def.pistonDir && tiles.front) { // Kolben: Front-Kachel nur auf der Schub-Seite
             const fn = PISTON_FRONT[def.pistonDir];
             if (n[0] === fn[0] && n[1] === fn[1] && n[2] === fn[2]) tileName = tiles.front;

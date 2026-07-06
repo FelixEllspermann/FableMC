@@ -168,10 +168,21 @@ export const BLOCK = {
   SPRUCE_STAIRS_E_TOP: 200, SPRUCE_STAIRS_W_TOP: 201, SPRUCE_STAIRS_S_TOP: 202, SPRUCE_STAIRS_N_TOP: 203,
   JUNGLE_STAIRS_E_TOP: 204, JUNGLE_STAIRS_W_TOP: 205, JUNGLE_STAIRS_S_TOP: 206, JUNGLE_STAIRS_N_TOP: 207,
   PEBBLES_WET: 208, // Unterwasser-Kiesel (Zelle bleibt Wasser — waterPlant)
+  // Beerenbüsche: rot in Fichten-, gelb in Eichen-, blau in Birkenwäldern
+  BERRY_BUSH_RED: 209, BERRY_BUSH_BLUE: 210, BERRY_BUSH_YELLOW: 211,
+  // Liegende Stämme (Achse X/Z) — für umgestürzte Bäume & waagerechtes Platzieren
+  LOG_X: 212, LOG_Z: 213,
+  BIRCH_LOG_X: 214, BIRCH_LOG_Z: 215,
+  SPRUCE_LOG_X: 216, SPRUCE_LOG_Z: 217,
+  JUNGLE_LOG_X: 218, JUNGLE_LOG_Z: 219,
+  DARK_GRASS: 220,        // dunkleres Gras (Old Birch Forest)
+  MUSHROOM_RED: 221,      // kleiner roter Bodenpilz (Kreuz-Sprite)
+  MUSHROOM_BROWN: 222,    // kleiner brauner Bodenpilz
+  LEAFY_GRASS: 223,       // laubbedecktes Gras (Spruce Valley)
 };
 
 // blocks mobs may spawn on / that count as "grass-like" ground
-export const GRASSY = [1, 15, 27, 23]; // GRASS, SNOWY_GRASS, SAVANNA_GRASS, MYCELIUM
+export const GRASSY = [1, 15, 27, 23, 220, 223]; // GRASS, SNOWY_GRASS, SAVANNA_GRASS, MYCELIUM, DARK_GRASS, LEAFY_GRASS
 
 // ---- Item ids (>= 1000; ids 1..999 sind platzierbare Blöcke — Chunks speichern Uint16) ----
 export const ITEM = {
@@ -235,6 +246,9 @@ export const ITEM = {
   BACKPACK: 1088,       // Rucksack: extra Inventar (mit B öffnen), Inhalt bleibt erhalten
   BOW: 1089,            // Bogen: Rechtsklick halten zum Spannen, loslassen zum Schießen
   ARROW: 1090,          // Pfeil: Munition für den Bogen (auch bei Dorfbewohnern kaufbar)
+  BERRY_RED: 1091,      // Beeren (essbar) — von Beerenbüschen
+  BERRY_BLUE: 1092,
+  BERRY_YELLOW: 1093,
 };
 
 // Ofen: was lässt sich schmelzen, was taugt als Brennstoff (Anzahl Schmelzvorgänge)
@@ -636,6 +650,58 @@ BLOCKS[BLOCK.BIRCH_SAPLING] = { name: 'Birkensetzling', tiles: { side: 'birch_sa
   hardness: 0.05, tool: null, harvestLevel: 0, opaque: false, solid: false, cross: true, sapling: 'birch' };
 BLOCKS[BLOCK.SPRUCE_SAPLING] = { name: 'Fichtensetzling', tiles: { side: 'spruce_sapling' },
   hardness: 0.05, tool: null, harvestLevel: 0, opaque: false, solid: false, cross: true, sapling: 'spruce' };
+
+// Beerenbüsche (Kreuz-Sprites): beim Abbauen fallen 1–3 Beeren; die Beeren sind essbar.
+BLOCKS[BLOCK.BERRY_BUSH_RED] = { name: 'Roter Beerenbusch', tiles: { side: 'berry_bush_red' },
+  hardness: 0.05, tool: null, harvestLevel: 0, opaque: false, solid: false, cross: true,
+  drops: ITEM.BERRY_RED, dropCount: [1, 3] };
+BLOCKS[BLOCK.BERRY_BUSH_BLUE] = { name: 'Blauer Beerenbusch', tiles: { side: 'berry_bush_blue' },
+  hardness: 0.05, tool: null, harvestLevel: 0, opaque: false, solid: false, cross: true,
+  drops: ITEM.BERRY_BLUE, dropCount: [1, 3] };
+BLOCKS[BLOCK.BERRY_BUSH_YELLOW] = { name: 'Gelber Beerenbusch', tiles: { side: 'berry_bush_yellow' },
+  hardness: 0.05, tool: null, harvestLevel: 0, opaque: false, solid: false, cross: true,
+  drops: ITEM.BERRY_YELLOW, dropCount: [1, 3] };
+
+// Stamm-Ausrichtung: senkrechter Basis-Stamm -> liegende Varianten je Achse
+export const LOG_AXIS = {
+  [BLOCK.LOG]: { x: BLOCK.LOG_X, z: BLOCK.LOG_Z },
+  [BLOCK.BIRCH_LOG]: { x: BLOCK.BIRCH_LOG_X, z: BLOCK.BIRCH_LOG_Z },
+  [BLOCK.SPRUCE_LOG]: { x: BLOCK.SPRUCE_LOG_X, z: BLOCK.SPRUCE_LOG_Z },
+  [BLOCK.JUNGLE_LOG]: { x: BLOCK.JUNGLE_LOG_X, z: BLOCK.JUNGLE_LOG_Z },
+};
+// Rückabbildung liegend -> senkrecht (für „Block übernehmen" & Ausrichten)
+export const LOG_BASE = {};
+for (const b in LOG_AXIS) { LOG_BASE[LOG_AXIS[b].x] = +b; LOG_BASE[LOG_AXIS[b].z] = +b; }
+
+// Liegende Stämme: gleiche Rinde, Stirnholz (log_top) an den Achs-Enden. logAxis steuert
+// im Mesher, welche Flächen Stirnholz zeigen. hidden: nicht in der Palette (durchs seitliche
+// Platzieren erzeugt), brechen → senkrechter Basis-Stamm.
+for (const [base, side] of [
+  [BLOCK.LOG, 'log_side'], [BLOCK.BIRCH_LOG, 'birch_log_side'],
+  [BLOCK.SPRUCE_LOG, 'spruce_log_side'], [BLOCK.JUNGLE_LOG, 'jungle_log_side'],
+]) {
+  const name = BLOCKS[base].name;
+  for (const axis of ['x', 'z']) {
+    BLOCKS[LOG_AXIS[base][axis]] = {
+      name, tiles: { top: 'log_top', side, bottom: 'log_top' },
+      hardness: 3, tool: 'axe', harvestLevel: 0, opaque: true, logAxis: axis, drops: base, hidden: true,
+    };
+  }
+}
+
+// Dunkler Grasblock (Old Birch Forest) — eigene, kühlere Grasfarbe
+BLOCKS[BLOCK.DARK_GRASS] = { name: 'Dunkler Grasblock',
+  tiles: { top: 'dark_grass_top', side: 'dark_grass_side', bottom: 'dirt' },
+  hardness: 0.9, tool: 'shovel', harvestLevel: 0, drops: BLOCK.DIRT, opaque: true };
+// Laubbedecktes Gras (Spruce Valley) — Gras mit Blattstreu
+BLOCKS[BLOCK.LEAFY_GRASS] = { name: 'Laubbedecktes Gras',
+  tiles: { top: 'leafy_grass_top', side: 'leafy_grass_side', bottom: 'dirt' },
+  hardness: 0.9, tool: 'shovel', harvestLevel: 0, drops: BLOCK.DIRT, opaque: true };
+// Kleine Bodenpilze (Kreuz-Sprites)
+BLOCKS[BLOCK.MUSHROOM_RED] = { name: 'Roter Pilz', tiles: { side: 'mushroom_red' },
+  hardness: 0.05, tool: null, harvestLevel: 0, opaque: false, solid: false, cross: true };
+BLOCKS[BLOCK.MUSHROOM_BROWN] = { name: 'Brauner Pilz', tiles: { side: 'mushroom_brown' },
+  hardness: 0.05, tool: null, harvestLevel: 0, opaque: false, solid: false, cross: true };
 BLOCKS[BLOCK.TNT] = { name: 'TNT', tiles: { top: 'tnt_top', side: 'tnt_side', bottom: 'tnt_top' },
   hardness: 0.5, tool: null, harvestLevel: 0, opaque: true };
 
@@ -781,6 +847,9 @@ export const ITEMS = {
   [ITEM.PORKCHOP]: { name: 'Rohes Schweinefleisch', tile: 'porkchop', food: 3 },
   [ITEM.ROTTEN_FLESH]: { name: 'Verrottetes Fleisch', tile: 'rotten_flesh', food: 4 },
   [ITEM.APPLE]: { name: 'Apfel', tile: 'apple', food: 4 },
+  [ITEM.BERRY_RED]: { name: 'Rote Beeren', tile: 'berry_red', food: 2, plant: BLOCK.BERRY_BUSH_RED, plantOnGrass: true },
+  [ITEM.BERRY_BLUE]: { name: 'Blaue Beeren', tile: 'berry_blue', food: 2, plant: BLOCK.BERRY_BUSH_BLUE, plantOnGrass: true },
+  [ITEM.BERRY_YELLOW]: { name: 'Gelbe Beeren', tile: 'berry_yellow', food: 2, plant: BLOCK.BERRY_BUSH_YELLOW, plantOnGrass: true },
 };
 
 // Haltbarkeit für bestehende Werkzeuge nachrüsten
@@ -850,7 +919,16 @@ Object.assign(ITEMS, {
 // Laub & Setzling-Helfer
 export function isLeafId(id) { return !!(id > 0 && BLOCKS[id]?.leaves); }
 export function isLogId(id) {
-  return id === BLOCK.LOG || id === BLOCK.BIRCH_LOG || id === BLOCK.SPRUCE_LOG || id === BLOCK.JUNGLE_LOG;
+  return id === BLOCK.LOG || id === BLOCK.BIRCH_LOG || id === BLOCK.SPRUCE_LOG || id === BLOCK.JUNGLE_LOG
+    || LOG_BASE[id] !== undefined;
+}
+// Stamm nach angeklickter Fläche ausrichten (nx/ny/nz = Flächennormale, wie in Minecraft)
+export function orientLog(id, nx, ny, nz) {
+  const base = LOG_BASE[id] ?? id;
+  const ax = LOG_AXIS[base];
+  if (!ax) return id;
+  if (ny !== 0) return base;        // Ober-/Unterseite → senkrecht
+  return nx !== 0 ? ax.x : ax.z;    // Seitenfläche → liegend entlang X bzw. Z
 }
 export function isSaplingId(id) { return !!(id > 0 && BLOCKS[id]?.sapling); }
 

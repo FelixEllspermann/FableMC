@@ -4,10 +4,11 @@ import * as THREE from 'three';
 import {
   WALK_SPEED, SPRINT_SPEED, SNEAK_SPEED, JUMP_SPEED, SWIM_UP_SPEED, REACH, PLAYER,
   BLOCK, BLOCKS, ITEM, ITEMS, isBlockId, isLiquid, ATTACK_COOLDOWN, nameOf,
-  isSaplingId, GRASSY, isSolid, isStairsId, isSlabId, isCarpetId,
+  isSaplingId, GRASSY, isSolid, isStairsId, isSlabId, isCarpetId, isLogId, orientLog,
   toggledDoorId, doorId, yawToCardinal, CARDINAL_DELTA, CARDINAL_OPP,
 } from './constants.js';
 import { Rules } from '../config.js';
+import { Keybinds } from './keybinds.js';
 import {
   isEquipment, damageItem, miningTimeFor, toolLevelFor, meleeDamageFor, equipStats, armorStats,
 } from './equip.js';
@@ -146,11 +147,14 @@ export class Player {
     return s.gameStarted && !s.paused && !s.uiOpen && !s.dead && document.pointerLockElement != null;
   }
 
+  // Ist die einer Aktion zugewiesene (belegbare) Taste gerade gedrückt?
+  held(action) { return !!this.keys[Keybinds.get(action)]; }
+
   _bindInput() {
     document.addEventListener('keydown', (e) => {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
       this.keys[e.code] = true;
-      if (e.code === 'KeyW') {
+      if (e.code === Keybinds.get('forward')) {
         const now = performance.now();
         if (now - this.lastW < 280) this.sprinting = true;
         this.lastW = now;
@@ -160,7 +164,7 @@ export class Player {
         if (n >= 1 && n <= 9) this.ctx.inventory.setHotbarIndex(n - 1);
       }
       const s = this.ctx.state;
-      if (e.code === 'Space' && !e.repeat) {
+      if (e.code === Keybinds.get('jump') && !e.repeat) {
         // Doppel-Leertaste: Fliegen umschalten (Kreativ oder Levitations-Zauber)
         const now = performance.now();
         if ((s.mode === 'creative' || this.effects.levitation > 0) &&
@@ -179,8 +183,8 @@ export class Player {
       if (e.code === 'KeyB' && s.mode === 'creative' && this.playable) {
         this.ctx.ui.showBiomeMenu();
       }
-      // Q: gewähltes Item fallen lassen (wirft es in Blickrichtung)
-      if (e.code === 'KeyQ' && this.playable && !s.spectator) {
+      // gewähltes Item fallen lassen (wirft es in Blickrichtung)
+      if (e.code === Keybinds.get('drop') && this.playable && !s.spectator) {
         this.dropSelected();
       }
       // while playing (pointer locked): swallow everything the browser would react to
@@ -668,7 +672,7 @@ export class Player {
       }
     }
     // Dorfbewohner im Fadenkreuz → Handel öffnen (nicht beim Schleichen)
-    if (!this.keys.ShiftLeft) {
+    if (!this.held('sneak')) {
       const eye = this._eyePos(this._eye);
       const dir = this._viewDir(this._dir);
       const reach = REACH - 1 + equipStats(this.ctx.inventory.selectedItem()).reach;
@@ -681,7 +685,7 @@ export class Player {
       }
     }
     // Zucht: passendes Futter am Tier im Fadenkreuz → verlieben (Herzchen)
-    if (held != null && this.ctx.entities.isAnyBreedFood(held) && !this.keys.ShiftLeft) {
+    if (held != null && this.ctx.entities.isAnyBreedFood(held) && !this.held('sneak')) {
       const eye = this._eyePos(this._eye);
       const dir = this._viewDir(this._dir);
       const reach = REACH - 1 + equipStats(this.ctx.inventory.selectedItem()).reach;
@@ -703,27 +707,27 @@ export class Player {
       }
     }
     // interact: crafting table / anvil (unless sneaking)
-    if (t && t.id === BLOCK.CRAFTING_TABLE && !this.keys.ShiftLeft) {
+    if (t && t.id === BLOCK.CRAFTING_TABLE && !this.held('sneak')) {
       this.ctx.inventory.open(true);
       this.rightHeld = false;
       return;
     }
-    if (t && t.id === BLOCK.ANVIL && !this.keys.ShiftLeft) {
+    if (t && t.id === BLOCK.ANVIL && !this.held('sneak')) {
       this.ctx.inventory.open('anvil');
       this.rightHeld = false;
       return;
     }
-    if (t && (t.id === BLOCK.FURNACE || t.id === BLOCK.FURNACE_ON) && !this.keys.ShiftLeft) {
+    if (t && (t.id === BLOCK.FURNACE || t.id === BLOCK.FURNACE_ON) && !this.held('sneak')) {
       this.ctx.inventory.open('furnace', { x: t.x, y: t.y, z: t.z });
       this.rightHeld = false;
       return;
     }
-    if (t && t.id === BLOCK.BREWING_STAND && !this.keys.ShiftLeft) {
+    if (t && t.id === BLOCK.BREWING_STAND && !this.held('sneak')) {
       this.ctx.inventory.open('brewing', { x: t.x, y: t.y, z: t.z });
       this.rightHeld = false;
       return;
     }
-    if (t && t.id === BLOCK.WASHER && !this.keys.ShiftLeft) {
+    if (t && t.id === BLOCK.WASHER && !this.held('sneak')) {
       this.ctx.inventory.open('washer', { x: t.x, y: t.y, z: t.z });
       this.rightHeld = false;
       return;
@@ -741,7 +745,7 @@ export class Player {
       this.rightHeld = false;
       return;
     }
-    if (t && t.id === BLOCK.CHEST && !this.keys.ShiftLeft) {
+    if (t && t.id === BLOCK.CHEST && !this.held('sneak')) {
       this.ctx.inventory.open('chest', { x: t.x, y: t.y, z: t.z });
       this.rightHeld = false;
       return;
@@ -779,7 +783,7 @@ export class Player {
       return;
     }
     // Tür öffnen/schließen (beide Hälften togglen)
-    if (t && BLOCKS[t.id]?.door && !this.keys.ShiftLeft) {
+    if (t && BLOCKS[t.id]?.door && !this.held('sneak')) {
       const lowerY = BLOCKS[t.id].door === 'lower' ? t.y : t.y - 1;
       const lo = this.world.getBlock(t.x, lowerY, t.z);
       const up = this.world.getBlock(t.x, lowerY + 1, t.z);
@@ -792,7 +796,7 @@ export class Player {
       return;
     }
     // Falltür togglen
-    if (t && BLOCKS[t.id]?.trapdoor && !this.keys.ShiftLeft) {
+    if (t && BLOCKS[t.id]?.trapdoor && !this.held('sneak')) {
       if (BLOCKS[t.id].trapdoor === 'closed') {
         // öffnet weg vom Spieler: Paneel an der fernen Kante
         const dx = t.x + 0.5 - this.pos.x, dz = t.z + 0.5 - this.pos.z;
@@ -806,7 +810,7 @@ export class Player {
       return;
     }
     // Bett: Spawnpunkt setzen, nachts schlafen (Bild wird schwarz, Nacht wird übersprungen)
-    if (t && BLOCKS[t.id]?.bed && !this.keys.ShiftLeft) {
+    if (t && BLOCKS[t.id]?.bed && !this.held('sneak')) {
       this.spawnPoint = { x: t.x, y: t.y + 1, z: t.z };
       if (this.ctx.daynight.isNight()) {
         this.ctx.ui.sleep(() => {
@@ -883,8 +887,9 @@ export class Player {
     }
     // Saat/Setzgut auf Ackerland pflanzen (Weizensamen, Karotten, Kartoffeln)
     if (t && held != null && ITEMS[held]?.plant != null &&
-        (t.id === BLOCK.FARMLAND || t.id === BLOCK.FARMLAND_WET) &&
-        this.world.getBlock(t.x, t.y + 1, t.z) === BLOCK.AIR) {
+        this.world.getBlock(t.x, t.y + 1, t.z) === BLOCK.AIR &&
+        ((t.id === BLOCK.FARMLAND || t.id === BLOCK.FARMLAND_WET) ||
+         (ITEMS[held].plantOnGrass && GRASSY.includes(t.id)))) {
       this._editBlock(t.x, t.y + 1, t.z, ITEMS[held].plant);
       if (this.ctx.state.mode !== 'creative') this.ctx.inventory.consumeSelected(1);
       this.ctx.sounds.pickup();
@@ -967,6 +972,9 @@ export class Player {
       } else if (isSlabId(held)) {
         const mat = BLOCKS[held].matBase; // Holzart/Material der gehaltenen Stufe
         placeId = BLOCK[mat + (hitUpper ? '_TOP' : '')];
+      } else if (isLogId(held)) {
+        // Stamm entlang der Achse der angeklickten Fläche legen (Ober-/Unterseite = senkrecht)
+        placeId = orientLog(held, t.nx, t.ny, t.nz);
       } else if (BLOCKS[held]?.redstone === 'piston') {
         const pre = BLOCKS[held].sticky ? 'STICKY_PISTON_' : 'PISTON_';
         // Kolben schiebt in Blickrichtung; steiler Blick (>45°) → nach oben/unten
@@ -1057,7 +1065,10 @@ export class Player {
             if (def.dropAlt && Math.random() < def.dropAlt.chance) dropId = def.dropAlt.id;
             const chance = def.dropChance ?? 1;
             if (dropId && Math.random() < chance) {
-              this.ctx.entities.dropSynced(t.x + 0.5, t.y + 0.5, t.z + 0.5, dropId, 1);
+              // dropCount [min,max]: mehrere Drops auf einmal (z. B. Beerenbüsche → 1–3 Beeren)
+              const dc = def.dropCount;
+              const n = dc ? dc[0] + (Math.random() * (dc[1] - dc[0] + 1) | 0) : 1;
+              this.ctx.entities.dropSynced(t.x + 0.5, t.y + 0.5, t.z + 0.5, dropId, n);
             }
           }
           // XP fürs Abbauen von Erzen (lokal — jeder Client zählt sein eigenes)
@@ -1121,13 +1132,13 @@ export class Player {
     // --- movement input ---
     const wish = this._wish.set(0, 0, 0);
     if (active) {
-      if (this.keys.KeyW) wish.z -= 1;
-      if (this.keys.KeyS) wish.z += 1;
-      if (this.keys.KeyA) wish.x -= 1;
-      if (this.keys.KeyD) wish.x += 1;
-      if (this.keys.ControlLeft && this.keys.KeyW) this.sprinting = true;
+      if (this.held('forward')) wish.z -= 1;
+      if (this.held('back')) wish.z += 1;
+      if (this.held('left')) wish.x -= 1;
+      if (this.held('right')) wish.x += 1;
+      if (this.held('sprint') && this.held('forward')) this.sprinting = true;
     }
-    if (!this.keys.KeyW || wish.z >= 0) this.sprinting = false;
+    if (!this.held('forward') || wish.z >= 0) this.sprinting = false;
     if (wish.lengthSq() > 0) {
       wish.normalize();
       // rotate by yaw
@@ -1150,8 +1161,8 @@ export class Player {
       const accel = 45;
       const tx = wish.x * flySpeed, tz = wish.z * flySpeed;
       let ty = 0;
-      if (active && this.keys.Space) ty = flySpeed;
-      else if (active && this.keys.ShiftLeft) ty = -flySpeed;
+      if (active && this.held('jump')) ty = flySpeed;
+      else if (active && this.held('sneak')) ty = -flySpeed;
       this.vel.x += Math.max(-accel * dt, Math.min(accel * dt, tx - this.vel.x));
       this.vel.z += Math.max(-accel * dt, Math.min(accel * dt, tz - this.vel.z));
       this.vel.y += Math.max(-accel * dt, Math.min(accel * dt, ty - this.vel.y));
@@ -1166,14 +1177,14 @@ export class Player {
         this.fallDistance = 0;
       }
     } else {
-      let speed = (this.sprinting ? SPRINT_SPEED : this.keys.ShiftLeft ? SNEAK_SPEED : WALK_SPEED) * speedMult;
+      let speed = (this.sprinting ? SPRINT_SPEED : this.held('sneak') ? SNEAK_SPEED : WALK_SPEED) * speedMult;
       if (this.inWater) speed *= 0.6;
       const accel = this.inWater ? 25 : this.onGround ? 45 : 12;
       const tx = wish.x * speed, tz = wish.z * speed;
       this.vel.x += Math.max(-accel * dt, Math.min(accel * dt, tx - this.vel.x));
       this.vel.z += Math.max(-accel * dt, Math.min(accel * dt, tz - this.vel.z));
 
-      if (active && this.keys.Space) {
+      if (active && this.held('jump')) {
         if (this.inWater) {
           this.vel.y += Math.min(SWIM_UP_SPEED - this.vel.y, 30 * dt);
         } else if (this.onGround) {
@@ -1196,9 +1207,9 @@ export class Player {
       }
       if (BLOCKS[feetId]?.climbable || BLOCKS[midId]?.climbable) {
         this.fallDistance = 0;
-        if (active && (wish.lengthSq() > 0 || this.keys.Space)) {
+        if (active && (wish.lengthSq() > 0 || this.held('jump'))) {
           this.vel.y = 3.4; // hochklettern
-        } else if (active && this.keys.ShiftLeft) {
+        } else if (active && this.held('sneak')) {
           this.vel.y = Math.max(this.vel.y, 0); // festhalten
         } else {
           this.vel.y = Math.max(this.vel.y, -2.2); // langsam abrutschen

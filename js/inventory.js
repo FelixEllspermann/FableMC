@@ -3,6 +3,7 @@
 import { nameOf, stackSizeOf, BLOCKS, ITEMS, ITEM, BLOCK, SMELT, FUEL } from './constants.js';
 import { getIconDataURL } from './textures.js';
 import { matchGrid } from './crafting.js';
+import { Keybinds } from './keybinds.js';
 import {
   isEquipment, equipKind, makeInstance, tooltipFor, durabilityLeft, maxDurability, UPGRADE_IDS,
 } from './equip.js';
@@ -180,7 +181,7 @@ export class Inventory {
     document.addEventListener('keydown', (e) => {
       if (e.target && e.target.tagName === 'INPUT') return;
       const s = this.ctx.state;
-      if (e.code === 'KeyE') {
+      if (e.code === Keybinds.get('inventory')) {
         if (this._open) this.close();
         else if (s.gameStarted && !s.paused && !s.dead && !s.uiOpen) this.open(false);
       } else if (e.code === 'KeyB') {

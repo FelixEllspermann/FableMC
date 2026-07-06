@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { Rules, applyRules } from '../config.js';
 import { Sounds } from './sounds.js';
 import { createAtlas, updateAnimatedTiles } from './textures.js';
-import { findSpawn } from './worldgen.js';
+import { findSpawn, heightAt } from './worldgen.js';
 import { World } from './world.js';
 import { Fluids } from './fluids.js';
 import { Furnaces } from './furnaces.js';
@@ -13,6 +13,7 @@ import { Washer } from './washer.js';
 import { Redstone } from './redstone.js';
 import { Flora } from './flora.js';
 import { Fireflies } from './fireflies.js';
+import { Clouds } from './clouds.js';
 import { SpecialBlocks } from './blocks.js';
 import { FarTerrain } from './farterrain.js';
 import { DayNight } from './daynight.js';
@@ -24,6 +25,8 @@ import { Player } from './player.js';
 import { SaveManager } from './save.js';
 import { UI } from './ui.js';
 import { Net } from './net.js';
+import { t } from './lang.js';
+import { Settings } from './settings.js';
 
 // Nach einem GPU-Reset kann die Kontext-Erstellung direkt nach dem Reload noch
 // fehlschlagen — dann mit Wartezeit erneut versuchen statt schwarz zu bleiben.
@@ -131,8 +134,81 @@ function pregenerate() {
   });
 }
 
+// Menü-Hintergrund: eine feste, leicht verschwommene Welt, die als Diorama langsam im
+// Kreis rotiert. Die Kamera schwebt hoch ÜBER dem Gelände und blickt schräg nach unten,
+// damit sie nie durch Blöcke klippt. Läuft bis der Spieler im Menü wählt.
+function startMenuBackground() {
+  try {
+    const sky = new THREE.Color(0x8fbcff);
+    const menuScene = new THREE.Scene();
+    menuScene.background = sky;
+    menuScene.fog = new THREE.Fog(sky, 70, 118);
+    const menuCam = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 500);
+
+    const seed = 1337; // fester, schöner Seed: Blumenwiese mit sanften Hügeln, viel Land
+    const world = new World({ scene: menuScene, seed, textures: ctx.textures, renderDistance: 7 });
+
+    const spawn = findSpawn(seed);
+    const cx = spawn.x, cz = spawn.z;
+    const rad = 44;
+    // Höhe entlang der Umlaufbahn abtasten und die Kamera deutlich darüber legen → kein Klippen
+    let maxSurf = spawn.y;
+    for (let a = 0; a < 16; a++) {
+      const sx = Math.round(cx + Math.cos((a / 16) * Math.PI * 2) * rad);
+      const sz = Math.round(cz + Math.sin((a / 16) * Math.PI * 2) * rad);
+      maxSurf = Math.max(maxSurf, heightAt(seed, sx, sz));
+    }
+    const eye = maxSurf + 30;                                   // klar über allem
+    const target = new THREE.Vector3(cx, spawn.y - 2, cz);      // schräger Blick nach unten auf den Anker
+    let angle = Math.random() * Math.PI * 2;
+
+    // Canvas leicht verschwommen + minimal vergrößert (kaschiert die weichen Blur-Ränder)
+    const canvas = renderer.domElement;
+    canvas.style.filter = 'blur(3px)';
+    canvas.style.transform = 'scale(1.06)';
+
+    let raf = 0, last = performance.now(), stopped = false;
+    const frame = (now) => {
+      if (stopped) return;
+      raf = requestAnimationFrame(frame);
+      try {
+        const dt = Math.min((now - last) / 1000, 0.05);
+        last = now;
+        angle += dt * 0.04; // langsame Kreisbewegung
+        menuCam.position.set(cx + Math.cos(angle) * rad, eye, cz + Math.sin(angle) * rad);
+        menuCam.lookAt(target);
+        const aspect = window.innerWidth / window.innerHeight;
+        if (menuCam.aspect !== aspect) { menuCam.aspect = aspect; menuCam.updateProjectionMatrix(); }
+        world.update(dt, menuCam.position);
+        updateAnimatedTiles(dt);
+        renderer.render(menuScene, menuCam);
+      } catch (err) {
+        stopped = true; // Frame-Fehler nie fatal — Menü bleibt bedienbar
+        console.warn('Menü-Hintergrund gestoppt:', err.message);
+      }
+    };
+    raf = requestAnimationFrame(frame);
+
+    return {
+      stop() {
+        if (stopped) { try { world.dispose(); } catch { /* egal */ } return; }
+        stopped = true;
+        cancelAnimationFrame(raf);
+        canvas.style.filter = '';
+        canvas.style.transform = '';
+        try { world.dispose(); } catch { /* Menü ist vorbei */ }
+      },
+    };
+  } catch (e) {
+    console.warn('Menü-Hintergrund nicht verfügbar:', e);
+    return { stop() {} };
+  }
+}
+
 async function boot() {
+  const menuBg = startMenuBackground();
   const choice = await ui.showTitle();
+  menuBg.stop();
 
   // Mehrspieler: erst verbinden — der Server liefert Seed, Änderungen, Truhen & Zeit
   let welcome = null;
@@ -179,6 +255,7 @@ async function boot() {
     ctx.blocks.onBlockChanged(x, y, z);
   };
   ctx.daynight = new DayNight(ctx);
+  ctx.clouds = new Clouds(ctx);
   ctx.entities = new EntityManager(ctx);
   ctx.inventory = new Inventory(ctx);
   ctx.survival = new Survival(ctx);
@@ -242,7 +319,7 @@ async function boot() {
 
   ctx.state.gameStarted = true;
   if (!welcome) ctx.save.startAutosave(); // im Mehrspieler speichert der Server
-  if (!welcome) ui.toast('Klicken, um zu spielen');
+  if (!welcome) ui.toast(t('toast.clickToPlay'));
 
   // pointer lock wiring
   renderer.domElement.addEventListener('click', () => {
@@ -265,9 +342,17 @@ function startLoop() {
   const STEP = 1 / 60;
   let last = performance.now();
   let acc = 0;
+  let lastRender = 0;
 
   function frame(now) {
     requestAnimationFrame(frame);
+    // Bildraten-Grenze: rendert VSync die Bilder nicht (VSync aus) und ist ein Limit
+    // gesetzt, überspringen wir dieses rAF, bis das Zeitbudget erreicht ist. Die
+    // Simulation bleibt echtzeitgenau, weil dt bis zum nächsten Bild akkumuliert.
+    if (!Settings.vsync && Settings.maxFps > 0) {
+      if (now - lastRender < 1000 / Settings.maxFps - 0.6) return;
+    }
+    lastRender = now;
     const dt = Math.min((now - last) / 1000, 0.25);
     last = now;
     const s = ctx.state;
@@ -309,6 +394,7 @@ function startLoop() {
     }
     ctx.farterrain.update(dt, ctx.player.pos);
     ctx.daynight.update(dt);
+    ctx.clouds.update(); // Wolken folgen dem Spieler, driften mit der Weltzeit
     ctx.net?.update(dt); // Mehrspieler: Position senden, Avatare bewegen
     updateAnimatedTiles(dt); // Kelp & Seegras wehen (Atlas-Frames)
     ui.update(dt);

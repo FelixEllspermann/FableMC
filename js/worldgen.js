@@ -43,6 +43,8 @@ function noises(seed) {
       aquifer: makeNoise2D(seed ^ 0xb0a712),
       lavaN: makeNoise2D(seed ^ 0x5eeded),
       cavebiome: makeNoise2D(seed ^ 0x9d8c7b),
+      oldgrowth: makeNoise2D(seed ^ 0x0ab17c), // Patches für Old Birch Forest
+      river: makeNoise2D(seed ^ 0x71ff23),     // gewundene Flussläufe
       pillarReg: makeNoise2D(seed ^ 0x246813),
       pillar2: makeNoise2D(seed ^ 0x135792),
     };
@@ -128,6 +130,15 @@ export function columnInfo(seed, x, z) {
   const valley = 1 - smoothstep(0.02, 0.09, v);
   h -= valley * inland * (9 + 48 * M);
 
+  // Flüsse: schmale, gewundene Wasserläufe im Tiefland. Das Zentrum wird fast bis
+  // zum Flussbett (unter Meeresspiegel) abgesenkt, die Ränder sanft — die Wasser-
+  // füllung erzeugt daraus einen Fluss. riverV wird unten für Spruce Valley genutzt.
+  const riverV = Math.abs(fbm2(n.river, x * 0.0017, z * 0.0017, 3, 2, 0.5));
+  const riverCtr = 1 - smoothstep(0.018, 0.085, riverV);          // 1 in der Flussmitte
+  const riverLow = 1 - smoothstep(SEA_LEVEL + 10, SEA_LEVEL + 28, h); // nur im Tiefland
+  const riverCarve = riverCtr * riverLow;
+  if (riverCarve > 0) h += (SEA_LEVEL - 3 - h) * riverCarve * 0.96;
+
   // mushroom islands: rare bumps that only exist in open ocean
   const oceanMask = smoothstep(0.12, 0.3, -C);
   const island = smoothstep(0.44, 0.56, fbm2(n.mushroom, x * 0.005, z * 0.005, 2, 2, 0.5)) * oceanMask;
@@ -178,6 +189,19 @@ export function columnInfo(seed, x, z) {
     else biome = surf <= SEA_LEVEL + 6 ? 'sumpf' : 'wald';
   }
 
+  // Old Birch Forest: alte Birkenhaine (dunkles Gras, dicke Birken, umgestürzte Stämme,
+  // viel Pilze & Moos) — als Patches innerhalb normaler Birkenwälder
+  if (biome === 'birkenwald' && fbm2(n.oldgrowth, x * 0.006, z * 0.006, 2, 2, 0.5) > 0.25) {
+    biome = 'old_birch';
+  }
+
+  // Spruce Valley: kühles Fichtental entlang der Flüsse — die Ufer sind Land (Fichten,
+  // laubbedecktes Gras, Findlinge), die Flussmitte ist Wasser. Dadurch hat jedes Tal einen Fluss.
+  if (biome !== 'ozean' && biome !== 'see' && biome !== 'sumpf' &&
+      surf > SEA_LEVEL && surf < SEA_LEVEL + 13 && T < 0.14 && T > -0.32 && riverV < 0.14) {
+    biome = 'spruce_valley';
+  }
+
   // swamp: flatten SMOOTHLY toward the waterline (blends into neighbors, no hard step)
   if (surf > SEA_LEVEL - 2 && surf <= SEA_LEVEL + 10 && H > 0.18 && T > -0.16 && T < 0.26) {
     const T0 = fbm2(n.temp, x * 0.0016, z * 0.0016, 2, 2, 0.5);
@@ -218,6 +242,8 @@ const MAX_TREE_DENSITY = 0.095;
 const TREE_DENSITY = {
   wald: [0.055, 'oak'],
   birkenwald: [0.05, 'birch'],
+  old_birch: [0.06, 'birch_big'],
+  spruce_valley: [0.055, 'spruce_big'],
   tannenwald: [0.05, 'spruce'],
   schneewald: [0.03, 'spruce'],
   sumpf: [0.018, 'oak'],
@@ -245,6 +271,8 @@ function treeAt(seed, x, z) {
     : type.startsWith('mushroom') ? 4 + Math.floor(th * 3)
     : type === 'acacia' ? 4 + Math.floor(th * 2)
     : type === 'jungle' ? 8 + Math.floor(th * 6)
+    : type === 'birch_big' ? 9 + Math.floor(th * 4)  // dicke, hohe Birke
+    : type === 'spruce_big' ? 10 + Math.floor(th * 5) // dicke, hohe Fichte
     : 4 + Math.floor(th * 3);
   return { surf, h, type };
 }
@@ -308,6 +336,33 @@ function writeTree(data, ox, oz, tx, tz, t) {
     ring(topY + 1, 1, BLOCK.LEAVES, false);
     put(tx, topY + 1, tz, BLOCK.LEAVES, true);
     for (let y = surf + 1; y <= topY; y++) put(tx, y, tz, BLOCK.LOG, false);
+  } else if (type === 'birch_big') {
+    // dicke, hohe Birke: 2×2-Stamm + große runde Krone
+    const cols = [[0, 0], [1, 0], [0, 1], [1, 1]];
+    for (const [dx, dz] of cols) for (let y = surf + 1; y <= topY; y++) put(tx + dx, y, tz + dz, BLOCK.BIRCH_LOG, false);
+    const leaf = BLOCK.BIRCH_LEAVES;
+    for (let y = topY - 2; y <= topY + 2; y++) {
+      const rad = y <= topY ? 3 : y === topY + 1 ? 2 : 1; // oben schmaler
+      for (let dx = -rad; dx <= rad + 1; dx++) for (let dz = -rad; dz <= rad + 1; dz++) {
+        const cdx = dx - 0.5, cdz = dz - 0.5; // Abstand vom 2×2-Zentrum
+        if (cdx * cdx + cdz * cdz > (rad + 0.4) * (rad + 0.4)) continue;
+        put(tx + dx, y, tz + dz, leaf, true);
+      }
+    }
+  } else if (type === 'spruce_big') {
+    // dicke, hohe Fichte: 2×2-Stamm + breite, gestufte Nadelkrone
+    const cols = [[0, 0], [1, 0], [0, 1], [1, 1]];
+    for (const [dx, dz] of cols) for (let y = surf + 1; y <= topY; y++) put(tx + dx, y, tz + dz, BLOCK.SPRUCE_LOG, false);
+    for (let y = surf + 4; y <= topY; y++) {
+      const k = topY - y;
+      const rad = k % 2 === 0 ? 3 : 2; // abwechselnd breit/schmal → buschiger Kegel
+      for (let dx = -rad; dx <= rad + 1; dx++) for (let dz = -rad; dz <= rad + 1; dz++) {
+        const cdx = dx - 0.5, cdz = dz - 0.5;
+        if (cdx * cdx + cdz * cdz > (rad + 0.3) * (rad + 0.3)) continue;
+        put(tx + dx, y, tz + dz, BLOCK.SPRUCE_LEAVES, true);
+      }
+    }
+    for (const [dx, dz] of cols) put(tx + dx, topY + 1, tz + dz, BLOCK.SPRUCE_LEAVES, true); // Spitze
   } else { // mushroom_red / mushroom_brown
     const cap = type === 'mushroom_red' ? BLOCK.MUSHROOM_CAP_RED : BLOCK.MUSHROOM_CAP_BROWN;
     ring(topY, 2, cap, true);
@@ -315,6 +370,29 @@ function writeTree(data, ox, oz, tx, tz, t) {
     ring(topY + 1, 1, cap, false);
     put(tx, topY + 1, tz, cap, true);
     for (let y = surf + 1; y <= topY; y++) put(tx, y, tz, BLOCK.MUSHROOM_STEM, false);
+  }
+}
+
+// Umgestürzte Birke: liegender Stamm (3–5 Blöcke) auf dem Boden im Old Birch Forest.
+function fallenAt(seed, x, z) {
+  const r = hash2(seed ^ 0x3faa, x, z);
+  if (r >= 0.004) return null; // selten (Ursprung = ein Ende des Stamms)
+  const { surf, biome } = columnInfo(seed, x, z);
+  if (biome !== 'old_birch' || surf <= SEA_LEVEL || surf + 3 >= WORLD_HEIGHT) return null;
+  const axis = hash2(seed ^ 0x3fab, x, z) < 0.5 ? 'x' : 'z';
+  const len = 3 + Math.floor(hash2(seed ^ 0x3fac, x, z) * 3); // 3–5 Blöcke
+  return { axis, len };
+}
+function writeFallen(data, ox, oz, tx, tz, f, seed) {
+  const logId = f.axis === 'x' ? BLOCK.BIRCH_LOG_X : BLOCK.BIRCH_LOG_Z;
+  for (let i = 0; i < f.len; i++) {
+    const wx = f.axis === 'x' ? tx + i : tx;
+    const wz = f.axis === 'z' ? tz + i : tz;
+    const y = columnInfo(seed, wx, wz).surf + 1; // je Segment auf die lokale Oberfläche legen
+    const lx = wx - ox, lz = wz - oz;
+    if (lx < 0 || lx > 15 || lz < 0 || lz > 15 || y < 0 || y >= WORLD_HEIGHT) continue;
+    const idx = blockIndex(lx, y, lz);
+    if (data[idx] === BLOCK.AIR) data[idx] = logId; // nur auf Luft
   }
 }
 
@@ -355,9 +433,21 @@ function surfaceBlocks(biome, surf, seed, x, z, slope) {
       return hs < 0.3 ? [BLOCK.STONE, 1, BLOCK.STONE, 0] : [BLOCK.GRASS, 1, BLOCK.DIRT, 2];
     case 'savanne': return [BLOCK.SAVANNA_GRASS, 1, BLOCK.DIRT, 3];
     case 'pilzinsel': return [BLOCK.MYCELIUM, 1, BLOCK.DIRT, 3];
+    case 'old_birch': return [BLOCK.DARK_GRASS, 1, BLOCK.DIRT, 3];
+    case 'spruce_valley': return [BLOCK.LEAFY_GRASS, 1, BLOCK.DIRT, 3];
     default: return [BLOCK.GRASS, 1, BLOCK.DIRT, 3];
   }
 }
+
+// Beerenbüsche je Wald-Typ: rot in Fichten-, gelb in Eichen-, blau in Birkenwäldern
+const BERRY_BY_BIOME = {
+  tannenwald: BLOCK.BERRY_BUSH_RED,
+  schneewald: BLOCK.BERRY_BUSH_RED,
+  wald: BLOCK.BERRY_BUSH_YELLOW,
+  birkenwald: BLOCK.BERRY_BUSH_BLUE,
+  old_birch: BLOCK.BERRY_BUSH_BLUE,
+  spruce_valley: BLOCK.BERRY_BUSH_RED,
+};
 
 // decoration: [flowerChance, tallGrassChance]
 const DECO = {
@@ -590,6 +680,26 @@ export function generateChunkData(cx, cz, seed) {
           data[blockIndex(lx, surf + 1, lz)] = BLOCK.TALL_GRASS;
         }
       }
+      // Beerenbüsche je nach Wald-Biom auf freiem Gras
+      const berry = BERRY_BY_BIOME[biome];
+      if (berry && surf > SEA_LEVEL && surf + 1 < WORLD_HEIGHT &&
+          data[blockIndex(lx, surf, lz)] === topId &&
+          (topId === BLOCK.GRASS || topId === BLOCK.SNOWY_GRASS || topId === BLOCK.DARK_GRASS || topId === BLOCK.LEAFY_GRASS) &&
+          data[blockIndex(lx, surf + 1, lz)] === BLOCK.AIR &&
+          hash2(seed ^ 0x8e77, x, z) < 0.02) {
+        data[blockIndex(lx, surf + 1, lz)] = berry;
+      }
+      // Old Birch Forest: viele Pilze am Boden + Moosflecken (statt Gras)
+      if (biome === 'old_birch' && surf > SEA_LEVEL && surf + 1 < WORLD_HEIGHT &&
+          data[blockIndex(lx, surf, lz)] === topId && topId === BLOCK.DARK_GRASS) {
+        const rm = hash2(seed ^ 0x4d05, x, z);
+        if (rm < 0.05 && data[blockIndex(lx, surf + 1, lz)] === BLOCK.AIR) {
+          data[blockIndex(lx, surf + 1, lz)] =
+            hash2(seed ^ 0x4d06, x, z) < 0.5 ? BLOCK.MUSHROOM_RED : BLOCK.MUSHROOM_BROWN;
+        } else if (rm < 0.12) {
+          data[blockIndex(lx, surf, lz)] = BLOCK.MOSS; // Moosfleck im Boden
+        }
+      }
       // Dschungel: dichter Blätter-Unterwuchs (Büsche) auf sonst freiem Boden
       if (biome === 'dschungel' && surf > SEA_LEVEL && surf + 1 < WORLD_HEIGHT &&
           topId === BLOCK.GRASS && data[blockIndex(lx, surf, lz)] === topId &&
@@ -697,16 +807,18 @@ export function generateChunkData(cx, cz, seed) {
       const dw = wellAt(seed, tx, tz);
       if (dw) writeWell(data, ox, oz, tx, tz, dw.surf);
       const bo = boulderAt(seed, tx, tz);
-      if (bo) writeBoulder(data, ox, oz, tx, tz, bo.surf, bo.r, bo.unterwasser, seed, bo.jungle);
+      if (bo) writeBoulder(data, ox, oz, tx, tz, bo.surf, bo.r, bo.unterwasser, seed, bo.jungle, bo.valley);
       const pd = pondAt(seed, tx, tz);
       if (pd) writePond(data, ox, oz, tx, tz, pd.surf, seed);
     }
   }
-  // Dschungelriesen (dicker 2×2-Stamm, mehrstöckige Krone): Scan mit ±5-Rand
+  // Dschungelriesen (dicker 2×2-Stamm, mehrstöckige Krone) + umgestürzte Birken: Scan mit ±5-Rand
   for (let tz = oz - 5; tz <= oz + 20; tz++) {
     for (let tx = ox - 5; tx <= ox + 20; tx++) {
       const gt = giantJungleAt(seed, tx, tz);
       if (gt) writeGiantJungle(data, ox, oz, tx, tz, gt.surf, gt.h, seed);
+      const fa = fallenAt(seed, tx, tz);
+      if (fa) writeFallen(data, ox, oz, tx, tz, fa, seed);
     }
   }
   // Tempel (9×9 + Lianen) und Unterwasser-Ruinen (7×7): Scan mit ±5-Rand
@@ -1088,21 +1200,23 @@ function boulderAt(seed, x, z) {
   if (h >= 0.004) return null;                    // cheap reject bei der Dschungel-Rate
   const { surf, biome } = columnInfo(seed, x, z);
   const jungle = biome === 'dschungel';
-  if (!jungle && h >= 0.0009) return null;         // außerhalb Dschungel wieder selten
+  const valley = biome === 'spruce_valley'; // Fichtental: viele (moosige) Findlinge
+  if (!jungle && !valley && h >= 0.0009) return null; // sonst selten
   if (surf < 40 || surf + 6 >= WORLD_HEIGHT) return null;
   const unterwasser = surf < SEA_LEVEL - 2;
   if (!unterwasser && (biome === 'wueste' || biome === 'badlands' || biome === 'strand')) return null;
-  // groß (Radius 2, mehrblöckig) oder klein (Radius 1 / Einzelstein) — im Dschungel öfter groß
-  const groß = hash2(seed ^ 0xb0e5, x, z) < (jungle ? 0.6 : 0.35);
-  return { surf, unterwasser, r: groß ? 2 : 1, jungle };
+  // groß (Radius 2, mehrblöckig) oder klein (Radius 1 / Einzelstein) — im Dschungel/Tal öfter groß
+  const groß = hash2(seed ^ 0xb0e5, x, z) < (jungle || valley ? 0.6 : 0.35);
+  return { surf, unterwasser, r: groß ? 2 : 1, jungle, valley };
 }
 
 const BOULDER_MIX_WASSER = [BLOCK.STONE, BLOCK.MOSSY_COBBLESTONE, BLOCK.COBBLESTONE, BLOCK.MOSSY_COBBLESTONE];
 const BOULDER_MIX_LAND = [BLOCK.STONE, BLOCK.STONE, BLOCK.COBBLESTONE, BLOCK.MOSSY_COBBLESTONE];
 const BOULDER_MIX_JUNGLE = [BLOCK.MOSSY_COBBLESTONE, BLOCK.MOSSY_COBBLESTONE, BLOCK.MOSS, BLOCK.COBBLESTONE];
+const BOULDER_MIX_VALLEY = [BLOCK.MOSSY_COBBLESTONE, BLOCK.STONE, BLOCK.MOSS, BLOCK.MOSSY_COBBLESTONE, BLOCK.COBBLESTONE];
 
-function writeBoulder(data, ox, oz, bx, bz, surf, r, unterwasser, seed, jungle) {
-  const mix = jungle ? BOULDER_MIX_JUNGLE : unterwasser ? BOULDER_MIX_WASSER : BOULDER_MIX_LAND;
+function writeBoulder(data, ox, oz, bx, bz, surf, r, unterwasser, seed, jungle, valley) {
+  const mix = valley ? BOULDER_MIX_VALLEY : jungle ? BOULDER_MIX_JUNGLE : unterwasser ? BOULDER_MIX_WASSER : BOULDER_MIX_LAND;
   const cy = surf + r; // ragt sichtbar auf, Basis bleibt im Boden verankert
   for (let dy = -r; dy <= r; dy++) {
     for (let dz = -r; dz <= r; dz++) {
@@ -1800,6 +1914,8 @@ const FAR_COLORS = {
   gebirgsfuss: [0.45, 0.53, 0.33],
   wald: [0.25, 0.46, 0.19],
   birkenwald: [0.34, 0.55, 0.25],
+  old_birch: [0.24, 0.38, 0.18], // dunkleres Waldgrün
+  spruce_valley: [0.19, 0.35, 0.23], // kühles Fichtental
   tannenwald: [0.17, 0.32, 0.19],
   blumenwiese: [0.45, 0.66, 0.29],
   ebene: [0.44, 0.65, 0.3],

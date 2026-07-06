@@ -340,8 +340,9 @@ export class World {
 
   update(dt, playerPos, anchors = []) {
     const pcx = Math.floor(playerPos.x / CS), pcz = Math.floor(playerPos.z / CS);
-    // dynamic radii from the settings menu (voxel detail capped, far terrain beyond)
-    const R = Math.min(Settings.renderDistance, VOXEL_DETAIL_CAP);
+    // dynamic radii from the settings menu (voxel detail capped, far terrain beyond).
+    // ctx.renderDistance überschreibt die globale Einstellung (z. B. leichter Menü-Hintergrund).
+    const R = Math.min(this.ctx.renderDistance ?? Settings.renderDistance, VOXEL_DETAIL_CAP);
     const GEN = R + 1, UNLOAD = R + 3;
 
     // 1) generate chunk data, nearest first — parallel via workers when available

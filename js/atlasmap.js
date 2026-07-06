@@ -60,6 +60,10 @@ export const TILE_NAMES = [
   'emerald', 'sapphire', 'emerald_ore', 'sapphire_ore',
   'backpack', 'bow', 'arrow',
   'birch_planks', 'spruce_planks', 'jungle_planks',
+  'berry_bush_red', 'berry_bush_blue', 'berry_bush_yellow',
+  'berry_red', 'berry_blue', 'berry_yellow',
+  'dark_grass_top', 'dark_grass_side', 'mushroom_red', 'mushroom_brown',
+  'leafy_grass_top', 'leafy_grass_side',
 ];
 
 const cache = new Map();

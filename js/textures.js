@@ -48,6 +48,27 @@ const PLANK_M = '#b8945f', PLANK_L = '#c9a56d', PLANK_D = '#9c7c4e';
 
 function paintDirt(p) { p.speckle(DIRTS, [0.4, 0.25, 0.2, 0.15]); }
 function paintStoneBase(p) { p.speckle(STONES, [0.35, 0.2, 0.2, 0.15, 0.1]); }
+
+// Beerenbusch-Sprite: grüner Busch (unten dichter) mit farbigen Beeren-Tupfen
+function paintBerryBush(p, berry, berryLite) {
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+    const r = p.rand();
+    if (r < 0.36 + (15 - y) * 0.006) continue; // Buschform: unten voller, oben lockerer
+    p.px(x, y, r < 0.5 ? '#2c5a1e' : r < 0.8 ? '#377326' : '#4a9134');
+  }
+  for (let i = 0; i < 10; i++) {
+    const x = 3 + Math.floor(p.rand() * 10), y = 5 + Math.floor(p.rand() * 9);
+    p.px(x, y, berry);
+    p.px(x, y - 1, p.rand() < 0.5 ? berryLite : berry); // kleines Glanzlicht
+  }
+}
+
+// Beeren als Item-Symbol: kleine Traube aus drei runden Beeren
+function paintBerries(p, main, lite, dark) {
+  p.blob(6, 9, 3, 3, main, lite, dark);
+  p.blob(10, 10, 3, 3, main, lite, dark);
+  p.blob(9, 5, 2.6, 2.6, main, lite, dark);
+}
 // Farbige Brett-Textur (Maserung + versetzte Fugen) — pro Holzart eigene Töne.
 function paintPlanksColored(p, M, L, D) {
   p.speckle([M, L], [0.85, 0.15]);
@@ -609,6 +630,14 @@ const PAINTERS = {
       p.px(x, y, r < 0.5 ? '#2c6a1c' : r < 0.78 ? '#398a26' : '#4fa835');
     }
   },
+  // Beerenbüsche: grüner Busch (unten voller) mit farbigen Beeren-Tupfen
+  berry_bush_red(p) { paintBerryBush(p, '#b52d2d', '#e46a6a'); },
+  berry_bush_blue(p) { paintBerryBush(p, '#2f47b0', '#6a82e6'); },
+  berry_bush_yellow(p) { paintBerryBush(p, '#caa018', '#f4d45a'); },
+  // Beeren als Item-Symbol: kleine Traube aus 3 Beeren
+  berry_red(p) { paintBerries(p, '#b52d2d', '#e46a6a', '#821f1f'); },
+  berry_blue(p) { paintBerries(p, '#2f47b0', '#6a82e6', '#1f2f80'); },
+  berry_yellow(p) { paintBerries(p, '#caa018', '#f4d45a', '#8f7010'); },
   red_sand(p) { p.speckle(['#c1682f', '#b55f2a', '#cc7136', '#a95826'], [0.4, 0.25, 0.2, 0.15]); },
   terracotta(p) { p.speckle(['#b5713f', '#ab6939', '#bd7944'], [0.5, 0.3, 0.2]); },
   terracotta_red(p) { p.speckle(['#8f4a2e', '#85422a', '#99522f'], [0.5, 0.3, 0.2]); },
@@ -635,6 +664,48 @@ const PAINTERS = {
     }
   },
   mushroom_cap_brown(p) { p.speckle(['#8a6a4a', '#7f6042', '#957552'], [0.5, 0.3, 0.2]); },
+  // laubbedecktes Gras (Spruce Valley): Gras + braune/orange Blattstreu
+  leafy_grass_top(p) {
+    p.speckle(GRASS, [0.4, 0.25, 0.2, 0.15]);
+    for (let i = 0; i < 24; i++) {
+      const x = Math.floor(p.rand() * 16), y = Math.floor(p.rand() * 16);
+      const c = ['#8a6a3a', '#a0703a', '#6f5a2e', '#b5854a'][i % 4];
+      p.px(x, y, c);
+      if (p.rand() < 0.45) p.px((x + 1) & 15, y, c);
+    }
+  },
+  leafy_grass_side(p) {
+    paintDirt(p);
+    p.rect(0, 0, 16, 3, GRASS[0]);
+    for (let x = 0; x < 16; x++) {
+      p.px(x, 1 + (p.rand() < 0.5 ? 0 : 1), GRASS[3]);
+      if (p.rand() < 0.5) p.px(x, 2, ['#8a6a3a', '#a0703a'][x % 2]); // Laubkante
+    }
+  },
+  // dunkleres, kühleres Gras (Old Birch Forest)
+  dark_grass_top(p) { p.speckle(['#3c5a2c', '#34501f', '#436633', '#2b4520'], [0.4, 0.25, 0.2, 0.15]); },
+  dark_grass_side(p) {
+    paintDirt(p);
+    p.rect(0, 0, 16, 3, '#3c5a2c');
+    for (let x = 0; x < 16; x++) {
+      p.px(x, 1 + (p.rand() < 0.5 ? 0 : 1), '#2b4520');
+      if (p.rand() < 0.6) p.px(x, 3, '#34501f');
+    }
+  },
+  // kleine Bodenpilze (Stiel + Kappe)
+  mushroom_red(p) {
+    for (let y = 9; y <= 14; y++) { p.px(7, y, '#ede5d4'); p.px(8, y, '#dcd3bf'); }
+    p.rect(4, 5, 8, 4, '#b0332e');
+    p.rect(5, 4, 6, 1, '#bd3c36');
+    p.clear(4, 8); p.clear(11, 8);
+    for (const [x, y] of [[6, 5], [9, 6], [7, 7], [10, 5]]) p.px(x, y, '#f0ece0');
+  },
+  mushroom_brown(p) {
+    for (let y = 9; y <= 14; y++) { p.px(7, y, '#ede5d4'); p.px(8, y, '#dcd3bf'); }
+    p.rect(4, 6, 8, 3, '#8a6743');
+    p.rect(5, 5, 6, 1, '#9a7550');
+    p.clear(4, 8); p.clear(11, 8);
+  },
   savanna_grass_top(p) { p.speckle(['#a9a24a', '#9d9743', '#b5ae52', '#918b3e'], [0.4, 0.25, 0.2, 0.15]); },
   savanna_grass_side(p) {
     paintDirt(p);

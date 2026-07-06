@@ -20,9 +20,10 @@ Three.js · pure ES-Module · prozedurale Pixel-Texturen (kein einziges Bild-Ass
 
 ## ✨ Was ist das?
 
-Eine voll spielbare Voxel-Sandbox: unendliche, prozedural erzeugte Welt mit 19 Biomen,
-Höhlen, Dungeons, Türmen und Dörfern, Tag-/Nacht-Zyklus, Fluid-Simulation, Mobs & Zucht,
-Überlebensmodus mit Hunger und Rüstung, Crafting mit Upgrade-System, XP & Level — und
+Eine voll spielbare Voxel-Sandbox: unendliche, prozedural erzeugte Welt mit **21 Biomen**,
+Höhlen, Dungeons, Türmen und Dörfern, Tag-/Nacht-Zyklus mit **sichtbarer Sonne, Mond & Wolken**,
+Flüssen, Fluid-Simulation, Mobs & Zucht, Überlebensmodus mit Hunger und Rüstung, Crafting mit
+Upgrade-System, XP & Level, Menü auf **Deutsch & Englisch**, frei belegbaren Tasten — und
 Mehrspieler. **Alle Texturen werden im Code als Pixel-Art gemalt**, es gibt keinen Build-Schritt
 und keine externen Dateien: einfach statisch ausliefern und im Browser öffnen.
 
@@ -92,13 +93,19 @@ Drops & Events. Der erste Spieler ist „Host" und simuliert die Mobs; verlässt
 
 Kreativmodus: **2×Leertaste** fliegen · **B** Biom-Teleport · **F4** Spectator (Noclip)
 
+> 💡 Alle Tasten sind in den **Einstellungen** frei belegbar — dort auch **Sprache (DE/EN)**,
+> Sichtweite, **Wolken** an/aus, **Bildrate-Grenze & VSync**.
+
 ---
 
 ## 🌲 Highlights
 
 ![Farbige Holzbretter, Treppen und Stufen](docs/wood.png)
 
-- **Unendliche Welt** mit Chunk-Streaming in Web Workern, mehrschichtigem Noise-Terrain und **19 Biomen** (Ozean, Wald, Wüste, Savanne, Badlands, Dschungel, Gebirge, Pilzinsel …)
+- **Unendliche Welt** mit Chunk-Streaming in Web Workern, mehrschichtigem Noise-Terrain, **Flüssen** und **21 Biomen** (Ozean, Wald, Wüste, Savanne, Badlands, Dschungel, Gebirge, Pilzinsel, **Old Birch Forest**, **Spruce Valley** …)
+- **Himmel & Wetter** — Tag-/Nacht-Zyklus mit **sichtbarer Sonne & Mond**, die je nach Uhrzeit über den Himmel wandern, dazu **Wolken** (an/aus) und Sterne; **Nebel, Wasser & Gras** werden je Biom eingefärbt
+- **Beeren & neue Biome** — Beerenbüsche (rot/blau/gelb, essbar & anpflanzbar); **Old Birch Forest** (dicke Birken, umgestürzte Stämme, Pilze, Moos, dunkles Gras) und **Spruce Valley** mit garantiertem **Fluss** (dicke Fichten, laubbedecktes Gras, moosige Findlinge)
+- **Liegende Stämme** — Stämme lassen sich in jede Richtung platzieren (X/Y/Z) → umgestürzte Bäume & Balken
 - **Höhlensystem** — Kammern, Tunnel, Schluchten, Aquifere, Lavaseen; Tropfstein- & Lush-Höhlenbiome; volle **Licht-Engine** (Himmels- + Blocklicht wie in MC)
 - **Fluid-Simulation** — Wasser & Lava mit Pegeln, Strömung, Verfestigung; animierte Strömungstextur & Gischt-Partikel
 - **Struktur-Vielfalt** — Dörfer mit Villagern & **Handel**, Magier-Türme, prozedurale **Dungeons**, Dschungel-Tempel, Schiffswracks, Unterwasser-Ruinen, Wüstenbrunnen
@@ -106,6 +113,7 @@ Kreativmodus: **2×Leertaste** fliegen · **B** Biom-Teleport · **F4** Spectato
 - **Mobs & Zucht** — Schweine, Schafe (scherbar), Hühner, Fische, Zombies, Skelette, Creeper, Villager + Blutroter-Zombie-**Boss**; Tiere lassen sich füttern & **züchten**
 - **Crafting & Upgrades** — 3×3-Werkbank, Werkzeuge/Rüstung in 5 Materialien, **Amboss**-Upgrades (kosten XP); **XP & Level**; **Bogen & Pfeile**
 - **Bauen** — Truhen, Türen, Glas(scheiben), Leitern, Falltüren, Teppiche, Betten, **farbige Bretter, Treppen & Stufen** je Holzart (Eiche/Birke/Fichte/Dschungel)
+- **Einstellungen** — Menü **Deutsch/Englisch**, **frei belegbare Steuerung**, Sichtweite, Wolken an/aus, **Bildrate-Grenze & VSync**
 - **Speichern/Laden** — Autosave in `localStorage` (Einzelspieler) bzw. serverseitig (Mehrspieler)
 
 _Die vollständige, sehr ausführliche Feature-Liste und die Architektur stehen in **[SPEC.md](SPEC.md)**._
@@ -124,7 +132,10 @@ js/                     Spiel-Code (pure ES-Module, kein Build)
   ├─ textures.js        16×16-Texturatlas, komplett im Code gemalt
   ├─ player.js physics.js entities.js survival.js inventory.js
   ├─ crafting.js experience.js daynight.js fluids.js flora.js
+  ├─ clouds.js          Wolkenschicht am Himmel
+  ├─ lang.js keybinds.js settings.js   Sprache (DE/EN), Tastenbelegung, Optionen
   └─ net.js             Mehrspieler-Client
+config.js               Welt-Regeln (Tageslänge, Spawns, Schaden …)
 lib/three.module.js     Three.js r185 (lokal → offline lauffähig)
 server.js               Mehrspieler-Server (WebSocket, host-autoritativ)
 launcher.js             Steuerzentrale (Welten/Server verwalten)

@@ -6,6 +6,7 @@
 
 import * as THREE from 'three';
 import { armorStats } from './equip.js';
+import { Keybinds } from './keybinds.js';
 import { BLOCK, ITEM, BLOCKS, ITEMS } from './constants.js';
 
 const CHAT_STYLE = `
@@ -109,7 +110,7 @@ export class Net {
         return;
       }
       const s = this.ctx.state;
-      if (e.code === 'KeyT' && s.gameStarted && !s.uiOpen && !s.dead && !s.paused &&
+      if (e.code === Keybinds.get('chat') && s.gameStarted && !s.uiOpen && !s.dead && !s.paused &&
           !(e.target && e.target.tagName === 'INPUT')) {
         e.preventDefault();
         this.openChat();
