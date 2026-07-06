@@ -92,6 +92,21 @@ export const LANGS = {
     'biome.prompt': 'Nächstes Vorkommen suchen und hinspringen:',
     // Hinweise
     'toast.clickToPlay': 'Klicken, um zu spielen',
+    // Konto
+    'acc.subtitle': 'Konto',
+    'acc.login': 'Anmelden',
+    'acc.register': 'Registrieren',
+    'acc.username': 'Benutzername',
+    'acc.password': 'Passwort',
+    'acc.loginBtn': 'Anmelden ▶',
+    'acc.registerBtn': 'Konto erstellen ▶',
+    'acc.hintLogin': 'Melde dich mit deinem Konto an.',
+    'acc.hintRegister': 'Wähle Name (3–20 Zeichen) und Passwort (mind. 6 Zeichen).',
+    'acc.needBoth': 'Bitte Name und Passwort eingeben.',
+    'acc.working': 'Moment …',
+    'acc.notConfigured': 'Noch kein Account-Server eingetragen (js/authconfig.js).',
+    'acc.loggedIn': 'Angemeldet als',
+    'acc.logout': 'Abmelden',
   },
   en: {
     // Main menu
@@ -178,6 +193,21 @@ export const LANGS = {
     'biome.prompt': 'Find the nearest occurrence and jump there:',
     // Toasts
     'toast.clickToPlay': 'Click to play',
+    // Account
+    'acc.subtitle': 'Account',
+    'acc.login': 'Log in',
+    'acc.register': 'Register',
+    'acc.username': 'Username',
+    'acc.password': 'Password',
+    'acc.loginBtn': 'Log in ▶',
+    'acc.registerBtn': 'Create account ▶',
+    'acc.hintLogin': 'Log in with your account.',
+    'acc.hintRegister': 'Choose a name (3–20 chars) and password (min. 6 chars).',
+    'acc.needBoth': 'Please enter name and password.',
+    'acc.working': 'Please wait …',
+    'acc.notConfigured': 'No account server set yet (js/authconfig.js).',
+    'acc.loggedIn': 'Logged in as',
+    'acc.logout': 'Log out',
   },
 };
 

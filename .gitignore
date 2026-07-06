@@ -8,6 +8,9 @@ bans.json
 mods.json
 server-info.json
 
+# Privates Konto-Backend (PHP) & die eingetragene Backend-URL — bleiben lokal
+account-backend/
+
 # Werkzeug-, Editor- und OS-Dateien
 .claude/
 .vscode/

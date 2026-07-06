@@ -5,6 +5,7 @@ import { biomeAt, columnInfo } from './worldgen.js';
 import { Settings } from './settings.js';
 import { t, getLang, setLang, onLangChange, randomSplash, LANG_NAMES } from './lang.js';
 import { Keybinds, KEYBIND_ACTIONS, keyLabel } from './keybinds.js';
+import { register, login, currentUser, logout, isConfigured } from './auth.js';
 import { Rules } from '../config.js';
 import {
   VOXEL_DETAIL_CAP, CHUNK_SIZE, BLOCKS, ITEMS, isBlockId, nameOf,
@@ -111,6 +112,14 @@ const STYLE = `
   0%, 100% { transform: rotate(-6deg) scale(1); }
   50% { transform: rotate(-6deg) scale(1.07); }
 }
+.ui-account-tabs { display: flex; gap: 6px; margin-bottom: 4px; }
+.ui-account-tabs .ui-btn { width: 155px; font-size: 16px; }
+.ui-account-tabs .ui-btn.sel { background: #5a7a4a; border-color: #8fd070 #2f3f22 #2f3f22 #8fd070; }
+.ui-account-err { color: #ff8a7a; font-size: 13px; min-height: 18px; max-width: 320px; text-align: center; }
+.ui-account-hint { color: #9aa4c4; font-size: 12.5px; max-width: 330px; text-align: center; line-height: 1.5; }
+.ui-user-bar { color: #cfe0ff; font-size: 13px; margin-top: 8px; text-shadow: 1px 1px 0 #1a2036; }
+.ui-user-bar b { color: #fff; }
+.ui-user-logout { margin-left: 6px; color: #ffb3a8; cursor: pointer; text-decoration: underline; }
 .ui-btn {
   font-size: 19px; padding: 10px 0; width: 320px; text-align: center;
   background: #6d6d6d; color: #fff; text-shadow: 2px 2px 0 #3f3f3f;
@@ -584,6 +593,70 @@ export class UI {
     return null;
   }
 
+  // ---- Konto-Bildschirm (Pflicht vor dem Hauptmenü) ----
+
+  showAccount() {
+    return new Promise((resolve) => {
+      const overlay = this._el('div', 'ui-overlay ui-title open');
+      const panel = this._el('div', 'ui-panel');
+      overlay.appendChild(panel);
+
+      const h1 = document.createElement('div');
+      h1.className = 'ui-h1'; h1.textContent = 'Fable MC';
+      const sub = document.createElement('div');
+      sub.className = 'ui-sub'; sub.textContent = t('acc.subtitle');
+      panel.appendChild(h1); panel.appendChild(sub);
+
+      let mode = 'login';
+      const tabs = document.createElement('div'); tabs.className = 'ui-account-tabs';
+      const tabLogin = this._btn(t('acc.login'), () => setMode('login'));
+      const tabReg = this._btn(t('acc.register'), () => setMode('register'));
+      tabs.appendChild(tabLogin); tabs.appendChild(tabReg);
+      panel.appendChild(tabs);
+
+      const userIn = document.createElement('input');
+      userIn.className = 'ui-seed'; userIn.placeholder = t('acc.username'); userIn.maxLength = 20;
+      panel.appendChild(userIn);
+      const passIn = document.createElement('input');
+      passIn.className = 'ui-seed'; passIn.type = 'password'; passIn.placeholder = t('acc.password'); passIn.maxLength = 64;
+      panel.appendChild(passIn);
+
+      const err = document.createElement('div'); err.className = 'ui-account-err';
+      panel.appendChild(err);
+      const submit = this._btn('', () => go());
+      panel.appendChild(submit);
+      const hint = document.createElement('div'); hint.className = 'ui-account-hint';
+      panel.appendChild(hint);
+
+      const setMode = (m) => {
+        mode = m; err.textContent = '';
+        tabLogin.classList.toggle('sel', m === 'login');
+        tabReg.classList.toggle('sel', m === 'register');
+        submit.textContent = m === 'login' ? t('acc.loginBtn') : t('acc.registerBtn');
+        hint.textContent = m === 'register' ? t('acc.hintRegister') : t('acc.hintLogin');
+      };
+      let busy = false;
+      const go = async () => {
+        if (busy) return;
+        const u = userIn.value.trim(), p = passIn.value;
+        if (!u || !p) { err.textContent = t('acc.needBoth'); return; }
+        busy = true; submit.disabled = true; err.textContent = t('acc.working');
+        try {
+          if (mode === 'register') await register(u, p); else await login(u, p);
+          overlay.remove();
+          resolve();
+        } catch (e) {
+          err.textContent = e.message || 'Fehler';
+          busy = false; submit.disabled = false;
+        }
+      };
+      passIn.addEventListener('keydown', (e) => { if (e.code === 'Enter') go(); });
+
+      setMode('login');
+      if (!isConfigured()) err.textContent = t('acc.notConfigured');
+    });
+  }
+
   // ---- title screen ----
 
   showTitle() {
@@ -627,6 +700,17 @@ export class UI {
       // „Beenden" nur in der Desktop-App (Electron) — schließt das Fenster/die App.
       if (/electron/i.test(navigator.userAgent)) {
         mainScreen.appendChild(this._btnT('menu.quit', () => window.close(), 'danger'));
+      }
+      // Angemeldeter Account + Abmelden
+      const konto = currentUser();
+      if (konto) {
+        const bar = document.createElement('div'); bar.className = 'ui-user-bar';
+        bar.textContent = t('acc.loggedIn') + ' ';
+        const b = document.createElement('b'); b.textContent = konto; bar.appendChild(b);
+        const out = document.createElement('span'); out.className = 'ui-user-logout'; out.textContent = t('acc.logout');
+        out.addEventListener('click', () => { logout(); location.reload(); });
+        bar.appendChild(out);
+        mainScreen.appendChild(bar);
       }
 
       // ---- Einzelspieler ----

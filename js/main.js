@@ -27,6 +27,7 @@ import { UI } from './ui.js';
 import { Net } from './net.js';
 import { t } from './lang.js';
 import { Settings } from './settings.js';
+import { hasValidSession, isConfigured } from './auth.js';
 
 // Nach einem GPU-Reset kann die Kontext-Erstellung direkt nach dem Reload noch
 // fehlschlagen — dann mit Wartezeit erneut versuchen statt schwarz zu bleiben.
@@ -218,6 +219,9 @@ function startMenuBackground() {
 
 async function boot() {
   const menuBg = startMenuBackground();
+  // Konto-Pflicht (sobald in authconfig.js ein Server eingetragen ist): ohne gültige
+  // Sitzung erst anmelden/registrieren. Ohne eingetragenen Server läuft das Spiel wie bisher.
+  if (isConfigured() && !hasValidSession()) await ui.showAccount();
   const choice = await ui.showTitle();
   menuBg.stop();
 
