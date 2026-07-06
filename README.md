@@ -59,7 +59,8 @@ Oder einfach **Doppelklick auf `Fable MC App.bat`**.
 
 **Doppelklick auf `Fable MC.bat`** → die **Steuerzentrale** öffnet sich in einem eigenen Fenster:
 Welt auswählen oder neu anlegen (Name + Seed), Server **starten / stoppen / neustarten**,
-PvP an/aus, Live-Infos (Spieler, Laufzeit, Log) und Moderator-/Bann-Verwaltung.
+PvP an/aus, **Server-Name, MotD & Bild** (erscheinen in der Serverliste der Mitspieler),
+Live-Infos (Spieler, Laufzeit, Log) und Moderator-/Bann-Verwaltung.
 
 ```bash
 npm install     # einmalig
@@ -115,7 +116,8 @@ Kreativmodus: **2×Leertaste** fliegen · **B** Biom-Teleport · **F4** Spectato
 - **Verzauberungen** — Kühe → Leder → Bücher, Bücherregale, Obsidian & **Verzauberungstisch** (Spell Core aus Magier-Türmen); 3 Seltenheitsstufen würfeln **Unzerbrechlich, Effizienz, Schärfe, Schutz & Stauraum** (kosten XP + Smaragde/Saphire)
 - **Bauen** — Truhen, Türen, Glas(scheiben), Leitern, Falltüren, Teppiche, Betten, **farbige Bretter, Treppen & Stufen** je Holzart (Eiche/Birke/Fichte/Dschungel)
 - **Einstellungen** — Menü **Deutsch/Englisch**, **frei belegbare Steuerung**, Sichtweite, Wolken an/aus, **Bildrate-Grenze & VSync**
-- **Speichern/Laden** — Autosave in `localStorage` (Einzelspieler) bzw. serverseitig (Mehrspieler)
+- **Menü & Server** — mehrere gespeicherte **Welten** zur Auswahl; Liste **vorheriger Server** mit **Online-Status**, Name, MotD & Bild (bleiben auch offline aus dem Zwischenspeicher sichtbar)
+- **Speichern/Laden** — Autosave je Welt in `localStorage` (Einzelspieler) bzw. serverseitig (Mehrspieler)
 
 _Die vollständige, sehr ausführliche Feature-Liste und die Architektur stehen in **[SPEC.md](SPEC.md)**._
 

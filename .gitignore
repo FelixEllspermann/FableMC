@@ -6,6 +6,7 @@ worlds/
 world-mp.json
 bans.json
 mods.json
+server-info.json
 
 # Werkzeug-, Editor- und OS-Dateien
 .claude/

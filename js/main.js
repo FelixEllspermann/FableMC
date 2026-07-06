@@ -134,6 +134,17 @@ function pregenerate() {
   });
 }
 
+// Server in die Liste „vorherige Server" aufnehmen (neueste zuerst, max. 8, dedupliziert).
+function rememberServer(name, adresse) {
+  try {
+    let list = JSON.parse(localStorage.getItem('fablemc.servers.v1') || '[]');
+    if (!Array.isArray(list)) list = [];
+    list = list.filter((s) => !(s.adresse === adresse && s.name === name));
+    list.unshift({ name, adresse, updated: Date.now() });
+    localStorage.setItem('fablemc.servers.v1', JSON.stringify(list.slice(0, 8)));
+  } catch { /* Speicher voll — egal */ }
+}
+
 // Menü-Hintergrund: eine feste, leicht verschwommene Welt, die als Diorama langsam im
 // Kreis rotiert. Die Kamera schwebt hoch ÜBER dem Gelände und blickt schräg nach unten,
 // damit sie nie durch Blöcke klippt. Läuft bis der Spieler im Menü wählt.
@@ -223,15 +234,13 @@ async function boot() {
       location.reload();
       return;
     }
-    // Für „Wieder verbinden" im Hauptmenü merken (Name + Adresse)
-    try {
-      localStorage.setItem('fablemc.lastserver',
-        JSON.stringify({ name: choice.name, adresse: choice.adresse || '' }));
-    } catch { /* Speicher voll — egal */ }
+    rememberServer(choice.name, choice.adresse || ''); // in die Liste „vorherige Server" aufnehmen
     applyRules(welcome.rules); // im Mehrspieler gelten die Regeln des Servers
     choice.seed = welcome.seed;
   }
   ctx.seed = choice.seed;
+  ctx.worldId = choice.worldId || null;          // Einzelspieler: welche gespeicherte Welt
+  ctx.worldName = choice.worldName || 'Welt';
 
   ctx.world = new World(ctx);
   ctx.fluids = new Fluids(ctx);
@@ -264,7 +273,7 @@ async function boot() {
   ctx.save = new SaveManager(ctx);
 
   let saved = null;
-  if (choice.mode === 'load') saved = ctx.save.load();
+  if (choice.mode === 'load') { saved = ctx.save.load(); if (saved?.name) ctx.worldName = saved.name; }
   if (welcome) {
     // geteilte Welt vom Server übernehmen
     ctx.state.mode = 'survival';

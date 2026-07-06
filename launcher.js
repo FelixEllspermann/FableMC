@@ -116,6 +116,7 @@ let aktuelleWelt = null; // { slug, name, seed, pvp }
 let startedAt = 0;
 let letzterExit = null;  // { code, at }
 let letztesPvp = false;  // zuletzt gewählte PvP-Einstellung (für Neustart)
+let letzteInfo = null;   // zuletzt gewählte Server-Identität (Name/MotD/Bild) — bleibt bei Neustart
 const logBuf = [];
 
 function logZeile(s) {
@@ -128,7 +129,7 @@ function logZeile(s) {
 
 function serverLaeuft() { return !!child && child.exitCode === null && !child.killed; }
 
-function starteServer(slug, wunschPort, pvp) {
+function starteServer(slug, wunschPort, pvp, info) {
   if (serverLaeuft()) return { ok: false, fehler: 'Der Server läuft bereits.' };
   if (wunschPort != null && wunschPort !== '') {
     const p = Number(wunschPort);
@@ -146,6 +147,16 @@ function starteServer(slug, wunschPort, pvp) {
   startedAt = Date.now();
   logZeile('Starte Server für Welt „' + aktuelleWelt.name + '" (Seed ' + aktuelleWelt.seed + ') auf Port ' + gamePort +
     (letztesPvp ? ' · PvP AN' : '') + ' …');
+  // Server-Identität (Name, MotD, Bild) für server.js hinterlegen (letzter Stand bleibt für Neustart)
+  if (info) {
+    letzteInfo = {
+      name: String(info.name || '').slice(0, 32),
+      motd: String(info.motd || '').slice(0, 120),
+      icon: (typeof info.icon === 'string' && info.icon.startsWith('data:image')) ? info.icon.slice(0, 200000) : '',
+    };
+  }
+  try { fs.writeFileSync(path.join(__dirname, 'server-info.json'), JSON.stringify(letzteInfo || {})); }
+  catch (e) { logZeile('Server-Info konnte nicht geschrieben werden: ' + e.message); }
   child = spawn(process.execPath, [SERVER_JS, '--welt', datei, '--port', String(gamePort),
     '--parent', String(process.pid), '--pvp', letztesPvp ? '1' : '0'], {
     cwd: __dirname, stdio: ['pipe', 'pipe', 'pipe'],
@@ -301,7 +312,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url === '/api/state') { json(await stateObj()); return; }
     if (req.method === 'GET' && url === '/api/worlds') { json({ worlds: listWorlds() }); return; }
     if (req.method === 'POST' && url === '/api/start') {
-      const b = await body(req); const r = starteServer(b.slug, b.port, b.pvp); json(r, r.ok ? 200 : 400); return;
+      const b = await body(req); const r = starteServer(b.slug, b.port, b.pvp, { name: b.sName, motd: b.motd, icon: b.icon }); json(r, r.ok ? 200 : 400); return;
     }
     if (req.method === 'POST' && url === '/api/new') {
       const b = await body(req);
@@ -309,7 +320,7 @@ const server = http.createServer(async (req, res) => {
         json({ ok: false, fehler: 'Ungültiger Port (1024–65535, nicht ' + CTRL_PORT + ').' }, 400); return;
       }
       const slug = createWorld(b.name, b.seed);
-      const r = starteServer(slug, b.port, b.pvp); json({ ...r, slug }, r.ok ? 200 : 400); return;
+      const r = starteServer(slug, b.port, b.pvp, { name: b.sName, motd: b.motd, icon: b.icon }); json({ ...r, slug }, r.ok ? 200 : 400); return;
     }
     if (req.method === 'POST' && url === '/api/stop') { stoppeServer(() => json({ ok: true })); return; }
     if (req.method === 'POST' && url === '/api/restart') { neustart(() => json({ ok: true })); return; }
@@ -487,6 +498,18 @@ const PANEL_HTML = `<!doctype html>
         <div style="flex:1"><span class="wmeta">Auf diesem Port läuft der Spielserver — Mitspieler verbinden sich über ihn (Standard 8123, auch fürs Port-Forwarding).</span></div>
       </div>
       <label class="pvpzeile"><input type="checkbox" id="pvpFeld"> <b>PvP</b> — Spieler können einander Schaden zufügen</label>
+      <div style="margin-top:16px">
+        <label>Server-Name (in der Serverliste)</label>
+        <input type="text" id="nameFeld" maxlength="32" placeholder="z. B. Mein Server">
+        <label>MotD — kurze Beschreibung</label>
+        <input type="text" id="motdFeld" maxlength="80" placeholder="Willkommen auf dem Server!">
+        <label>Server-Bild</label>
+        <div class="row" style="align-items:center;gap:12px;margin-bottom:0">
+          <img id="iconVorschau" alt="" style="display:none;width:52px;height:52px;border-radius:9px;object-fit:cover;border:1px solid #2f3d63">
+          <input type="file" id="iconFeld" accept="image/*" style="flex:1;color:#8b97b5">
+          <button type="button" class="btn-mini" id="iconWeg" style="display:none">✕</button>
+        </div>
+      </div>
     </div>
     <div class="card">
       <h2>Neue Welt erstellen</h2>
@@ -585,9 +608,49 @@ const PANEL_HTML = `<!doctype html>
     try { localStorage.setItem('fablemc.pvp', $('pvpFeld').checked ? '1' : '0'); } catch (e) {}
   });
 
+  // Server-Identität: Name, MotD, Bild (merkt sich die letzte Wahl im Browser)
+  var serverIcon = '';
+  function gewaehlterName() { return $('nameFeld').value.trim(); }
+  function gewaehlteMotd() { return $('motdFeld').value.trim(); }
+  try {
+    $('nameFeld').value = localStorage.getItem('fablemc.srvname') || '';
+    $('motdFeld').value = localStorage.getItem('fablemc.srvmotd') || '';
+    serverIcon = localStorage.getItem('fablemc.srvicon') || '';
+  } catch (e) {}
+  function zeigeIcon() {
+    var img = $('iconVorschau'), weg = $('iconWeg');
+    if (serverIcon) { img.src = serverIcon; img.style.display = 'block'; weg.style.display = 'inline-block'; }
+    else { img.style.display = 'none'; weg.style.display = 'none'; }
+  }
+  zeigeIcon();
+  $('nameFeld').addEventListener('change', function () { try { localStorage.setItem('fablemc.srvname', gewaehlterName()); } catch (e) {} });
+  $('motdFeld').addEventListener('change', function () { try { localStorage.setItem('fablemc.srvmotd', gewaehlteMotd()); } catch (e) {} });
+  $('iconFeld').addEventListener('change', function () {
+    var f = this.files && this.files[0]; if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var im = new Image();
+      im.onload = function () { // auf 64×64 herunterrechnen → klein für Speicher & Netzwerk
+        var c = document.createElement('canvas'); c.width = 64; c.height = 64;
+        c.getContext('2d').drawImage(im, 0, 0, 64, 64);
+        serverIcon = c.toDataURL('image/png');
+        try { localStorage.setItem('fablemc.srvicon', serverIcon); } catch (e) { zeigeHint('Bild zu groß zum Speichern.'); }
+        zeigeIcon();
+      };
+      im.src = reader.result;
+    };
+    reader.readAsDataURL(f);
+  });
+  $('iconWeg').addEventListener('click', function () {
+    serverIcon = ''; $('iconFeld').value = '';
+    try { localStorage.removeItem('fablemc.srvicon'); } catch (e) {}
+    zeigeIcon();
+  });
+  function serverIdentitaet() { return { sName: gewaehlterName(), motd: gewaehlteMotd(), icon: serverIcon }; }
+
   function starteWelt(slug) {
     if (busy) return; busy = true;
-    api('/api/start', { slug: slug, port: gewaehlterPort(), pvp: gewaehltesPvp() }).then(function (r) {
+    api('/api/start', Object.assign({ slug: slug, port: gewaehlterPort(), pvp: gewaehltesPvp() }, serverIdentitaet())).then(function (r) {
       busy = false;
       if (!r.ok) zeigeHint(r.fehler || 'Start fehlgeschlagen');
       else { zeigeHint(''); tick(); }
@@ -598,7 +661,7 @@ const PANEL_HTML = `<!doctype html>
     var name = $('neuName').value.trim();
     if (!name) { zeigeHint('Bitte einen Namen für die Welt eingeben.'); return; }
     busy = true;
-    api('/api/new', { name: name, seed: $('neuSeed').value, port: gewaehlterPort(), pvp: gewaehltesPvp() }).then(function (r) {
+    api('/api/new', Object.assign({ name: name, seed: $('neuSeed').value, port: gewaehlterPort(), pvp: gewaehltesPvp() }, serverIdentitaet())).then(function (r) {
       busy = false;
       if (!r.ok) zeigeHint(r.fehler || 'Konnte Welt nicht erstellen');
       else { $('neuName').value = ''; $('neuSeed').value = ''; zeigeHint(''); tick(); }

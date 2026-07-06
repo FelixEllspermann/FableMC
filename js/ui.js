@@ -150,6 +150,26 @@ const STYLE = `
   color: #9fb0ff; font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
   margin-top: 12px; padding-bottom: 3px; border-bottom: 1px solid #454d70; width: 344px; text-align: center;
 }
+.ui-list { width: 344px; max-height: 208px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+.ui-list-empty { color: #9aa4c4; font-size: 13px; text-align: center; padding: 8px; }
+.ui-list-row {
+  display: flex; align-items: center; gap: 8px; background: #3a4060; border: 1px solid #555d80; padding: 5px 8px;
+}
+.ui-list-info { flex: 1; display: flex; flex-direction: column; overflow: hidden; text-align: left; }
+.ui-list-info b { color: #fff; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui-list-info span { color: #9aa4c4; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ui-list-go {
+  font-size: 13px; padding: 5px 12px; background: #5a7a4a; color: #fff;
+  border: 2px solid; border-color: #8fd070 #2f3f22 #2f3f22 #8fd070;
+}
+.ui-list-go:hover { background: #6a8a58; }
+.ui-list-del { font-size: 13px; padding: 4px 8px; background: #6d3f3f; color: #fff; border: 1px solid #8a5a5a; line-height: 1; }
+.ui-list-del:hover { background: #9d5f5f; }
+.ui-srv-icon { width: 28px; height: 28px; border-radius: 5px; object-fit: cover; flex: 0 0 auto; border: 1px solid #555d80; }
+.ui-status-dot { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; background: #888; }
+.ui-status-dot.online { background: #4fd141; box-shadow: 0 0 5px #4fd141; }
+.ui-status-dot.offline { background: #e04b3a; }
+.ui-status-dot.checking { background: #e8c02c; }
 .ui-set-fps { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; width: 344px; }
 .ui-set-fps .ui-btn { width: auto; font-size: 13px; padding: 6px 12px; }
 .ui-set-fps .ui-btn.sel { background: #5a7a4a; border-color: #8fd070 #2f3f22 #2f3f22 #8fd070; }
@@ -167,6 +187,35 @@ const STYLE = `
 .ui-biomes-grid .ui-btn { width: auto; font-size: 14px; padding: 8px 4px; }
 .ui-biomes-status { color: #ffe25e; font-size: 14px; min-height: 18px; text-align: center; }
 `;
+
+// Server-Status prüfen: gelingt der WebSocket-Handshake, ist der Server online. Der Server
+// schickt sofort eine „serverinfo"-Nachricht (Name, MotD, Bild) — die wird mit zurückgegeben.
+function pingServer(adresse, cb) {
+  let url;
+  try {
+    url = adresse
+      ? (adresse.startsWith('ws') ? adresse : 'ws://' + adresse)
+      : (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
+  } catch { cb(false, null); return; }
+  let done = false, ws, info = null, t1, t2;
+  const finish = (ok) => { if (done) return; done = true; clearTimeout(t1); clearTimeout(t2); try { ws && ws.close(); } catch { /* egal */ } cb(ok, info); };
+  try { ws = new WebSocket(url); } catch { cb(false, null); return; }
+  t1 = setTimeout(() => finish(false), 3500);
+  ws.onopen = () => { clearTimeout(t1); t2 = setTimeout(() => finish(true), 500); }; // kurz auf serverinfo warten
+  ws.onmessage = (e) => {
+    try {
+      const m = JSON.parse(e.data);
+      if (m.type === 'serverinfo') { info = { name: m.name || '', motd: m.motd || '', icon: m.icon || '' }; finish(true); }
+    } catch { /* egal */ }
+  };
+  ws.onerror = () => finish(false);
+}
+
+// Zwischenspeicher für die zuletzt bekannten Server-Infos (fürs Anzeigen offline).
+function serverInfoCache() { try { return JSON.parse(localStorage.getItem('fablemc.srvinfo') || '{}') || {}; } catch { return {}; } }
+function saveServerInfo(key, info) {
+  try { const c = serverInfoCache(); c[key] = info; localStorage.setItem('fablemc.srvinfo', JSON.stringify(c)); } catch { /* egal */ }
+}
 
 export class UI {
   constructor(ctx) {
@@ -566,9 +615,9 @@ export class UI {
         el.style.display = '';
       };
 
-      const finish = (mode, seed, gamemode) => {
+      const finish = (mode, seed, gamemode, extra) => {
         overlay.remove();
-        resolve({ mode, seed, gamemode });
+        resolve({ mode, seed, gamemode, ...(extra || {}) });
       };
 
       // ---- Hauptmenü ----
@@ -581,6 +630,11 @@ export class UI {
       }
 
       // ---- Einzelspieler ----
+      const worldNameInput = document.createElement('input');
+      worldNameInput.className = 'ui-seed';
+      worldNameInput.maxLength = 24;
+      this._reg(() => { worldNameInput.placeholder = t('sp.worldName'); });
+      spScreen.appendChild(worldNameInput);
       const seedInput = document.createElement('input');
       seedInput.className = 'ui-seed';
       this._reg(() => { seedInput.placeholder = t('sp.seedPlaceholder'); });
@@ -592,25 +646,50 @@ export class UI {
       });
       this._reg(() => { modeBtn.textContent = t(gamemode === 'survival' ? 'sp.modeSurvival' : 'sp.modeCreative'); });
       spScreen.appendChild(modeBtn);
-      spScreen.appendChild(this._btnT('sp.newWorld', () => finish('new', parseSeed(seedInput.value), gamemode)));
-      const btnLoad = this._btnT('sp.continue', () => {
-        const meta = SaveManager.readMeta();
-        if (meta) finish('load', meta.seed, gamemode);
-      });
-      const btnDelete = this._btnT('sp.delete', () => {
-        if (window.confirm(t('sp.deleteConfirm'))) {
-          SaveManager.clear();
-          btnLoad.disabled = true;
-          btnDelete.disabled = true;
-          this.toast(t('sp.deleted'));
+      spScreen.appendChild(this._btnT('sp.create', () => {
+        const nm = worldNameInput.value.trim() || ('Welt ' + (SaveManager.listWorlds().length + 1));
+        finish('new', parseSeed(seedInput.value), gamemode, { worldId: SaveManager.newId(), worldName: nm });
+      }));
+
+      // ── Gespeicherte Welten ──
+      const worldsHead = document.createElement('div');
+      worldsHead.className = 'ui-set-section';
+      this._reg(() => { worldsHead.textContent = t('sp.savedWorlds'); });
+      spScreen.appendChild(worldsHead);
+      const worldList = document.createElement('div');
+      worldList.className = 'ui-list';
+      spScreen.appendChild(worldList);
+      const rebuildWorlds = () => {
+        worldList.textContent = '';
+        const worlds = SaveManager.listWorlds();
+        if (!worlds.length) {
+          const empty = document.createElement('div');
+          empty.className = 'ui-list-empty';
+          empty.textContent = t('sp.noWorlds');
+          worldList.appendChild(empty);
+          return;
         }
-      }, 'danger');
-      if (!SaveManager.hasSave()) {
-        btnLoad.disabled = true;
-        btnDelete.disabled = true;
-      }
-      spScreen.appendChild(btnLoad);
-      spScreen.appendChild(btnDelete);
+        for (const w of worlds) {
+          const row = document.createElement('div'); row.className = 'ui-list-row';
+          const info = document.createElement('div'); info.className = 'ui-list-info';
+          const nm = document.createElement('b'); nm.textContent = w.name;
+          const meta = document.createElement('span');
+          meta.textContent = `Seed ${w.seed} · ${t(w.mode === 'creative' ? 'sp.creative' : 'sp.survival')}`;
+          info.appendChild(nm); info.appendChild(meta);
+          const load = document.createElement('button'); load.className = 'ui-list-go';
+          load.textContent = t('sp.load');
+          load.addEventListener('click', () => finish('load', w.seed, w.mode || 'survival', { worldId: w.id }));
+          const del = document.createElement('button'); del.className = 'ui-list-del';
+          del.textContent = '✕'; del.title = t('sp.delete');
+          del.addEventListener('click', () => {
+            if (window.confirm(t('sp.deleteConfirm'))) { SaveManager.deleteWorld(w.id); rebuildWorlds(); this.toast(t('sp.deleted')); }
+          });
+          row.appendChild(info); row.appendChild(load); row.appendChild(del);
+          worldList.appendChild(row);
+        }
+      };
+      rebuildWorlds();
+      this._reg(rebuildWorlds); // bei Sprachwechsel neu beschriften
       spScreen.appendChild(this._btnT('menu.back', () => zeige(mainScreen)));
 
       // ---- Mehrspieler ----
@@ -623,34 +702,77 @@ export class UI {
       addrInput.className = 'ui-seed';
       this._reg(() => { addrInput.placeholder = t('mp.addrPlaceholder'); });
       mpScreen.appendChild(addrInput);
-      mpScreen.appendChild(this._btnT('mp.join', () => {
+      const joinWith = (name, adresse) => {
         overlay.remove();
         resolve({
           mode: 'multiplayer', gamemode: 'survival',
-          name: nameInput.value.trim() || t('mp.defaultName'),
-          adresse: addrInput.value.trim(),
+          name: (name || '').trim() || t('mp.defaultName'), adresse: (adresse || '').trim(),
         });
-      }));
-      // „Wieder verbinden": letzten Server mit demselben Namen erneut betreten
-      let letzter = null;
-      try { letzter = JSON.parse(localStorage.getItem('fablemc.lastserver') || 'null'); } catch { letzter = null; }
-      if (letzter && letzter.name) {
-        nameInput.value = letzter.name; // Felder vorbelegen
-        addrInput.value = letzter.adresse || '';
-      }
-      const rejoinLabel = () => (letzter && letzter.name
-        ? `${t('mp.rejoin')} (${letzter.name}${letzter.adresse ? ' @ ' + letzter.adresse : ''})`
-        : t('mp.rejoin'));
-      const btnRejoin = this._btn(rejoinLabel(), () => {
-        overlay.remove();
-        resolve({
-          mode: 'multiplayer', gamemode: 'survival',
-          name: letzter.name, adresse: letzter.adresse || '',
-        });
-      });
-      this._reg(() => { btnRejoin.textContent = rejoinLabel(); });
-      if (!(letzter && letzter.name)) btnRejoin.disabled = true;
-      mpScreen.appendChild(btnRejoin);
+      };
+      mpScreen.appendChild(this._btnT('mp.join', () => joinWith(nameInput.value, addrInput.value)));
+
+      // vorherige Server laden, Namensfeld vorbelegen
+      let servers = [];
+      try { servers = JSON.parse(localStorage.getItem('fablemc.servers.v1') || '[]'); } catch { servers = []; }
+      if (!Array.isArray(servers)) servers = [];
+      if (servers[0]?.name && !nameInput.value) nameInput.value = servers[0].name;
+
+      // ── Vorherige Server (mit Online-Status) ──
+      const srvHead = document.createElement('div');
+      srvHead.className = 'ui-set-section';
+      this._reg(() => { srvHead.textContent = t('mp.prevServers'); });
+      mpScreen.appendChild(srvHead);
+      const srvList = document.createElement('div');
+      srvList.className = 'ui-list';
+      mpScreen.appendChild(srvList);
+      const rebuildServers = () => {
+        srvList.textContent = '';
+        if (!servers.length) {
+          const empty = document.createElement('div');
+          empty.className = 'ui-list-empty';
+          empty.textContent = t('mp.noServers');
+          srvList.appendChild(empty);
+          return;
+        }
+        for (const srv of servers) {
+          const key = srv.adresse || 'local';
+          let cached = serverInfoCache()[key] || null;
+          const row = document.createElement('div'); row.className = 'ui-list-row';
+          const icon = document.createElement('img'); icon.className = 'ui-srv-icon'; icon.alt = '';
+          const dot = document.createElement('span'); dot.className = 'ui-status-dot checking';
+          dot.title = t('mp.checking');
+          const info = document.createElement('div'); info.className = 'ui-list-info';
+          const nm = document.createElement('b');
+          const meta = document.createElement('span');
+          info.appendChild(nm); info.appendChild(meta);
+          // zeigt Name/MotD/Bild aus der (zuletzt bekannten oder live) Server-Info
+          const applyInfo = (ci) => {
+            nm.textContent = (ci && ci.name) || srv.name;
+            meta.textContent = (ci && ci.motd) || srv.adresse || t('mp.thisServer');
+            if (ci && ci.icon) { icon.src = ci.icon; icon.style.display = 'block'; } else { icon.style.display = 'none'; }
+          };
+          applyInfo(cached);
+          const go = document.createElement('button'); go.className = 'ui-list-go';
+          go.textContent = t('mp.connect');
+          go.addEventListener('click', () => joinWith(nameInput.value || srv.name, srv.adresse));
+          const del = document.createElement('button'); del.className = 'ui-list-del';
+          del.textContent = '✕';
+          del.addEventListener('click', () => {
+            servers = servers.filter((x) => x !== srv);
+            try { localStorage.setItem('fablemc.servers.v1', JSON.stringify(servers)); } catch { /* egal */ }
+            rebuildServers();
+          });
+          row.appendChild(icon); row.appendChild(dot); row.appendChild(info); row.appendChild(go); row.appendChild(del);
+          srvList.appendChild(row);
+          pingServer(srv.adresse, (ok, live) => {
+            dot.className = 'ui-status-dot ' + (ok ? 'online' : 'offline');
+            dot.title = ok ? t('mp.online') : t('mp.offline');
+            if (ok && live && (live.name || live.motd || live.icon)) { cached = live; saveServerInfo(key, live); applyInfo(live); }
+          });
+        }
+      };
+      rebuildServers();
+      this._reg(rebuildServers);
       mpScreen.appendChild(this._btnT('menu.back', () => zeige(mainScreen)));
 
       zeige(mainScreen); // Start im Hauptmenü

@@ -24,6 +24,12 @@ const BANS_DATEI = path.join(__dirname, 'bans.json');
 const MODS_DATEI = path.join(__dirname, 'mods.json');
 const START_ZEIT = Date.now();
 let pvpAn = ['1', 'true', 'on'].includes(String(argVal('pvp') || '').toLowerCase()); // Spieler-vs-Spieler (per /pvp umschaltbar)
+// Server-Identität (Name, MotD, Bild) — von der Steuerzentrale in server-info.json geschrieben.
+const INFO_DATEI = path.join(__dirname, 'server-info.json');
+let serverInfo = { name: '', motd: '', icon: '' };
+try {
+  if (fs.existsSync(INFO_DATEI)) serverInfo = { ...serverInfo, ...JSON.parse(fs.readFileSync(INFO_DATEI, 'utf8')) };
+} catch (e) { console.warn('server-info.json unlesbar:', e.message); }
 const TAG_LAENGE = 2400; // Sekunden pro Zyklus (= DAY_LENGTH): 30 min Tag + 10 min Nacht
 // Sonnenphase wie in daynight.js: Tag füllt die ersten 3/4 des Zyklus
 function sonnenphase(f) {
@@ -360,6 +366,8 @@ wss.on('connection', (ws, req) => {
     setTimeout(() => ws.close(), 100);
     return;
   }
+  // Server-Identität sofort schicken — auch der Status-Ping (ohne „hello") liest sie
+  sende(ws, { type: 'serverinfo', name: serverInfo.name, motd: serverInfo.motd, icon: serverInfo.icon });
   ws.on('message', (raw) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
