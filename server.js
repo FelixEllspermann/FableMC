@@ -456,7 +456,7 @@ wss.on('connection', (ws, req) => {
       case 'move':
         ich.x = msg.x; ich.y = msg.y; ich.z = msg.z; ich.yaw = msg.yaw; ich.pitch = msg.pitch;
         ich.held = msg.held ?? 0; // gehaltenes Item (für die Hand des Avatars)
-        broadcast({ type: 'move', id: ich.id, x: msg.x, y: msg.y, z: msg.z, yaw: msg.yaw, pitch: msg.pitch, held: ich.held }, ws);
+        broadcast({ type: 'move', id: ich.id, x: msg.x, y: msg.y, z: msg.z, yaw: msg.yaw, pitch: msg.pitch, held: ich.held, st: msg.st }, ws);
         break;
       case 'edits': {
         // [[x,y,z,id], …] — in den Welt-Zustand übernehmen und weiterreichen
@@ -514,7 +514,7 @@ wss.on('connection', (ws, req) => {
       }
       // ---- Stufe 2: Host-Autorität für Mobs & Events ----
       case 'ents': // Entity-Snapshot vom Host → an alle anderen
-        if (ich.id === hostId) broadcast({ type: 'ents', list: msg.list }, ws);
+        if (ich.id === hostId) broadcast({ type: 'ents', list: msg.list, st: msg.st }, ws);
         break;
       case 'bossring': // Boss-Telegraf (nur Host) → an alle anderen zeigen
         if (ich.id === hostId) broadcast({ type: 'bossring', x: msg.x, y: msg.y, z: msg.z, r: msg.r, dur: msg.dur }, ws);
