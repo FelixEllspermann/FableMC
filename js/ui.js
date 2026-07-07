@@ -12,6 +12,7 @@ import {
   yawToCardinal,
 } from './constants.js';
 import { isEquipment, maxDurability, durabilityLeft } from './equip.js';
+import { BIOME_NAMES_EN } from './names_en.js';
 import { getIconDataURL } from './textures.js';
 
 // Anzeigenamen der Mobs fürs Fadenkreuz-Fenster
@@ -30,6 +31,12 @@ export const BIOME_NAMES = {
   schneelandschaft: 'Schneelandschaft', schneewald: 'Schneewald', pilzinsel: 'Pilzinsel',
   gebirgsfuss: 'Gebirgsfuß', haenge: 'Mittlere Hänge', hochgebirge: 'Hochgebirge', gipfel: 'Gipfel',
 };
+
+// Biom-Name in der aktiven Sprache (Englisch aus names_en.js, sonst Deutsch).
+export function biomeName(key) {
+  if (getLang() === 'en' && BIOME_NAMES_EN[key]) return BIOME_NAMES_EN[key];
+  return BIOME_NAMES[key] ?? key;
+}
 
 const STYLE = `
 .ui-crosshair {
@@ -534,8 +541,9 @@ export class UI {
 
     const grid = document.createElement('div');
     grid.className = 'ui-biomes-grid';
-    for (const [key, name] of Object.entries(BIOME_NAMES)) {
-      const b = this._btn(name, () => this._teleportToBiome(key, name));
+    for (const key of Object.keys(BIOME_NAMES)) {
+      const b = this._btn('', () => this._teleportToBiome(key, biomeName(key)));
+      this._reg(() => { b.textContent = biomeName(key); }); // bei Sprachwechsel neu beschriften
       grid.appendChild(b);
     }
     panel.appendChild(grid);
@@ -1023,14 +1031,14 @@ export class UI {
     // Blick & Bewegung
     const yawDeg = ((player.yaw * 180 / Math.PI) % 360 + 360) % 360;
     const pitchDeg = player.pitch * 180 / Math.PI;
-    const CARD = { N: 'Norden (−z)', S: 'Süden (+z)', E: 'Osten (+x)', W: 'Westen (−x)' };
+    const CARD = { N: t('dbg.dirN'), S: t('dbg.dirS'), E: t('dbg.dirE'), W: t('dbg.dirW') };
     const hSpeed = Math.hypot(player.vel.x, player.vel.z);
     const zustand = [
-      player.onGround ? 'am Boden' : 'in der Luft',
-      player.inWater ? 'im Wasser' : null,
-      player.inLava ? 'in Lava!' : null,
-      BLOCKS[world.getBlock(bx, by, bz)]?.climbable ? 'klettert' : null,
-      player.flying ? 'fliegt' : null,
+      player.onGround ? t('dbg.onGround') : t('dbg.inAir'),
+      player.inWater ? t('dbg.inWater') : null,
+      player.inLava ? t('dbg.inLava') : null,
+      BLOCKS[world.getBlock(bx, by, bz)]?.climbable ? t('dbg.climbing') : null,
+      player.flying ? t('dbg.flyingState') : null,
     ].filter(Boolean).join(' · ');
 
     // Klima & Spalte (tiefer als MC: die rohen Noise-Werte der Biomwahl)
@@ -1038,7 +1046,7 @@ export class UI {
 
     // Licht am Spieler (Nibble: Himmel/Block)
     const L = world.getLight(bx, by, bz);
-    const licht = L >= 0 ? `Himmel ${L >> 4} / Block ${L & 15}` : '—';
+    const licht = L >= 0 ? t('dbg.lightVal', L >> 4, L & 15) : '—';
 
     // Zeit
     const f = daynight.dayFraction;
@@ -1054,13 +1062,13 @@ export class UI {
 
     // Ziel-Block
     let ziel = '—';
-    const t = player.target;
-    if (t) {
-      const def = BLOCKS[t.id];
-      const tL = world.getLight(t.x + t.nx, t.y + t.ny, t.z + t.nz);
-      ziel = `${def?.name ?? '?'} (#${t.id})  @ ${t.x}/${t.y}/${t.z}\n` +
-        `  Härte ${def?.hardness ?? '—'} · Werkzeug ${def?.tool ?? 'Hand'} · Stufe ${def?.harvestLevel ?? 0}` +
-        (tL >= 0 ? ` · Licht ${tL >> 4}/${tL & 15}` : '');
+    const tgt = player.target;
+    if (tgt) {
+      const def = BLOCKS[tgt.id];
+      const tL = world.getLight(tgt.x + tgt.nx, tgt.y + tgt.ny, tgt.z + tgt.nz);
+      ziel = `${def?.name ?? '?'} (#${tgt.id})  @ ${tgt.x}/${tgt.y}/${tgt.z}\n` +
+        `  ${t('dbg.hardness')} ${def?.hardness ?? '—'} · ${t('dbg.tool')} ${def?.tool ?? t('dbg.hand')} · ${t('dbg.tier')} ${def?.harvestLevel ?? 0}` +
+        (tL >= 0 ? ` · ${t('dbg.light')} ${tL >> 4}/${tL & 15}` : '');
     }
 
     // Hand
@@ -1069,7 +1077,7 @@ export class UI {
     if (held) {
       hand = `${nameOf(held.id)} (#${held.id}) ×${held.count}`;
       if (isEquipment(held.id)) {
-        hand += ` · Haltbarkeit ${durabilityLeft(held)}/${maxDurability(held)}`;
+        hand += ` · ${t('inv.durability')} ${durabilityLeft(held)}/${maxDurability(held)}`;
         if (held.slots) hand += ` · Slots ${(held.upgrades || []).length}/${held.slots}`;
       }
     }
@@ -1077,27 +1085,27 @@ export class UI {
     const sp = player.spawnPoint;
     this.debugL.textContent =
       `Fable MC — ${Math.round(this._fps)} FPS (${this._frameMs.toFixed(1)} ms)\n` +
-      `Modus: ${st.mode}${st.spectator ? ' (Spectator)' : ''}\n` +
+      `${t('dbg.mode')}: ${st.mode}${st.spectator ? ' (Spectator)' : ''}\n` +
       `\n` +
       `XYZ: ${p.x.toFixed(3)} / ${p.y.toFixed(3)} / ${p.z.toFixed(3)}\n` +
       `Block: ${bx} ${by} ${bz}\n` +
       `Chunk: ${lx} ${by} ${lz}  in  ${cx} ${cz}\n` +
-      `Blick: ${CARD[yawToCardinal(player.yaw)]}  (yaw ${yawDeg.toFixed(1)}° / pitch ${pitchDeg.toFixed(1)}°)\n` +
-      `Tempo: ${hSpeed.toFixed(2)} B/s horizontal · ${player.vel.y.toFixed(2)} vertikal\n` +
-      `Status: ${zustand}\n` +
+      `${t('dbg.facing')}: ${CARD[yawToCardinal(player.yaw)]}  (yaw ${yawDeg.toFixed(1)}° / pitch ${pitchDeg.toFixed(1)}°)\n` +
+      `${t('dbg.speed')}: ${t('dbg.speedUnit', hSpeed.toFixed(2), player.vel.y.toFixed(2))}\n` +
+      `${t('dbg.status')}: ${zustand}\n` +
       `\n` +
-      `Biom: ${BIOME_NAMES[col.biome] ?? col.biome}\n` +
-      `Klima: T ${col.T.toFixed(3)} · H ${col.H.toFixed(3)} · Berg ${col.mEff.toFixed(3)}\n` +
-      `Oberfläche: y ${col.surf} (Δ ${(p.y - col.surf).toFixed(1)})\n` +
-      `Licht hier: ${licht}\n` +
+      `${t('dbg.biome')}: ${biomeName(col.biome)}\n` +
+      `${t('dbg.climate')}: T ${col.T.toFixed(3)} · H ${col.H.toFixed(3)} · Berg ${col.mEff.toFixed(3)}\n` +
+      `${t('dbg.surface')}: y ${col.surf} (Δ ${(p.y - col.surf).toFixed(1)})\n` +
+      `${t('dbg.lightHere')}: ${licht}\n` +
       `\n` +
-      `Zeit: ${hh}:${mm} ${daynight.isNight() ? '☾ Nacht' : '☀ Tag'} · Tag ${tag}\n` +
+      `${t('dbg.time')}: ${hh}:${mm} ${daynight.isNight() ? t('dbg.night') : t('dbg.dayLabel')} · ${t('dbg.day')} ${tag}\n` +
       `Seed: ${seed}\n` +
-      `Spawn: ${sp ? `${sp.x} ${sp.y} ${sp.z} (Bett)` : 'Welt-Spawn'}\n` +
-      `Effekte: ${effekte}\n` +
+      `${t('dbg.spawn')}: ${sp ? `${sp.x} ${sp.y} ${sp.z} ${t('dbg.spawnBed')}` : t('dbg.spawnWorld')}\n` +
+      `${t('dbg.effects')}: ${effekte}\n` +
       `\n` +
-      `Ziel: ${ziel}\n` +
-      `Hand: ${hand}`;
+      `${t('dbg.target')}: ${ziel}\n` +
+      `${t('dbg.hand')}: ${hand}`;
 
     // ---- rechte Spalte: Engine ----
     let meshed = 0, dirty = 0, lightDirty = 0, mitDaten = 0;

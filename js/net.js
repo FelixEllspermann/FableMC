@@ -9,6 +9,7 @@ import { armorStats } from './equip.js';
 import { Keybinds } from './keybinds.js';
 import { BLOCK, ITEM, BLOCKS, ITEMS } from './constants.js';
 import { getSession } from './auth.js';
+import { t } from './lang.js';
 
 const CHAT_STYLE = `
 .mp-chatlog {
@@ -223,8 +224,8 @@ export class Net {
   _onClose() {
     this.ws = null;
     if (this._rausgeworfen) return; // Kick/Bann hat schon eine Meldung gezeigt
-    this.addChat('⚙', 'Verbindung zum Server verloren');
-    this.ctx.ui?.toast('⚠ Verbindung zum Server verloren');
+    this.addChat('⚙', t('hud.connLostChat'));
+    this.ctx.ui?.toast(t('hud.connLost'));
   }
 
   // Eigenen Spielstand (Inventar, Position, Leben) an den Server schicken —
@@ -404,7 +405,7 @@ export class Net {
         if (r && r.dead <= 0) {
           r.dead = 1.2;
           this.ctx.furnaces?.burst(r.mesh.position.x, r.mesh.position.y + 1, r.mesh.position.z, 22);
-          this.addChat('⚙', (r.name || 'Ein Spieler') + ' ist gestorben');
+          this.addChat('⚙', t('hud.playerDied', r.name || t('hud.someone')));
         }
         break;
       }
@@ -419,7 +420,7 @@ export class Net {
         // alte Remote-Mobs überall verwerfen — der neue Host baut frisch auf
         ctx.entities?.clearRemote();
         if (this.isHost) {
-          ctx.ui?.toast('👑 Du bist jetzt der Host — Mobs laufen auf deinem Gerät');
+          ctx.ui?.toast(t('hud.becameHost'));
         }
         break;
       }
@@ -468,9 +469,9 @@ export class Net {
       case 'bossring': // Host: Boden-Schlag angekündigt → Kreis auch bei mir zeigen
         ctx.entities?.showTelegraph(m.x, m.y, m.z, m.r || 3.6, m.dur || 1.1);
         break;
-      case 'kicked': this._rauswurf('⚠ Du wurdest vom Server geworfen'); break;
-      case 'banned': this._rauswurf('⛔ Du wurdest von diesem Server gebannt'); break;
-      case 'authfail': this._rauswurf('⛔ ' + (m.reason || 'Konto-Anmeldung ungültig')); break;
+      case 'kicked': this._rauswurf(t('hud.kicked')); break;
+      case 'banned': this._rauswurf(t('hud.banned')); break;
+      case 'authfail': this._rauswurf('⛔ ' + (m.reason || t('hud.authfailDefault'))); break;
       // ---- Moderator-Befehle ----
       case 'cmd': this._applyCmd(m); break;                 // Server-Aktion an mich (tp/kill/give …)
       case 'modset': this.mod = !!m.on; break;              // Mod-Status geändert
@@ -486,7 +487,7 @@ export class Net {
       case 'tp':
         ctx.player.pos.set(m.x, m.y, m.z);
         ctx.player.vel.set(0, 0, 0);
-        ui?.toast('➤ Teleportiert');
+        ui?.toast(t('hud.teleported'));
         break;
       case 'kill':
         if (ctx.survival && !ctx.state.dead) {
@@ -499,41 +500,41 @@ export class Net {
         if (ctx.survival) {
           ctx.survival.health = 20; ctx.survival.hunger = 20;
           ctx.survival.air = ctx.survival._maxAir ?? 10;
-          ctx.survival.render?.(); ui?.toast('❤ Voll geheilt');
+          ctx.survival.render?.(); ui?.toast(t('hud.healed'));
         }
         break;
       case 'feed':
-        if (ctx.survival) { ctx.survival.hunger = 20; ctx.survival.render?.(); ui?.toast('🍖 Gesättigt'); }
+        if (ctx.survival) { ctx.survival.hunger = 20; ctx.survival.render?.(); ui?.toast(t('hud.fed')); }
         break;
       case 'give': {
         const id = this._resolveItem(m.item);
-        if (!id) { ui?.toast('Item „' + m.item + '" unbekannt'); break; }
+        if (!id) { ui?.toast(t('hud.itemUnknown', m.item)); break; }
         ctx.inventory?.addItem(id, m.count || 1);
-        ui?.toast('Erhalten: ' + (m.count || 1) + '× ' + m.item);
+        ui?.toast(t('hud.received', m.count || 1, m.item));
         break;
       }
       case 'god':
         if (ctx.survival) {
           ctx.survival.god = !ctx.survival.god;
-          ui?.toast('🛡 Unverwundbar: ' + (ctx.survival.god ? 'AN' : 'AUS'));
+          ui?.toast(t('hud.invincible', ctx.survival.god ? t('hud.on') : t('hud.off')));
         }
         break;
       case 'fly':
         ctx.player.modFly = !ctx.player.modFly;
         ctx.player.flying = ctx.player.modFly;
-        ui?.toast('🕊 Fliegen: ' + (ctx.player.modFly ? 'AN' : 'AUS'));
+        ui?.toast(t('hud.flying', ctx.player.modFly ? t('hud.on') : t('hud.off')));
         break;
       case 'gm':
         ctx.state.mode = m.mode === 'creative' ? 'creative' : 'survival';
         if (m.mode !== 'creative' && !ctx.player.modFly) ctx.player.flying = false;
-        ui?.toast('Spielmodus: ' + (m.mode === 'creative' ? 'Kreativ' : 'Überleben'));
+        ui?.toast(t('hud.gamemode', m.mode === 'creative' ? t('hud.creative') : t('hud.survival')));
         break;
       case 'clear':
         if (ctx.inventory) {
           for (let i = 0; i < ctx.inventory.slots.length; i++) ctx.inventory.slots[i] = null;
           if (ctx.inventory.armor) for (const k of ['helmet', 'chest', 'legs', 'boots']) ctx.inventory.armor[k] = null;
           ctx.inventory._renderAll?.();
-          ui?.toast('🗑 Inventar geleert');
+          ui?.toast(t('hud.invCleared'));
         }
         break;
     }

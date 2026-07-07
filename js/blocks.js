@@ -1,6 +1,7 @@
 // Spezialblock-Verwaltung: Truhen-Inventare, Tür-/Bett-Paarpflege, Leiter-Halt.
 
 import { BLOCK, BLOCKS, ITEM, isBedId, isSolid, isWaterId } from './constants.js';
+import { t } from './lang.js';
 
 export class SpecialBlocks {
   constructor(ctx) {
@@ -18,22 +19,22 @@ export class SpecialBlocks {
     if (net?.active && !net.isHost && vonId === 0) {
       this._ausgelöst ??= new Set();
       if (this._ausgelöst.has(key)) {
-        this.ctx.ui.toast('Die Truhe ist noch versiegelt — besiege alle Wächter!');
+        this.ctx.ui.toast(t('hud.chestSealed'));
         return;
       }
       this._ausgelöst.add(key);
       net.sendEvTrig(x, y, z);
-      this.ctx.ui.toast('⚔ Die Truhe erwacht! Welle 1: Wächter greifen an!');
+      this.ctx.ui.toast(t('hud.chestWave1'));
       this.ctx.sounds.fuse();
       return;
     }
     if (this.lootEvents.has(key)) {
-      if (vonId === 0) this.ctx.ui.toast('Die Truhe ist noch versiegelt — besiege alle Wächter!');
+      if (vonId === 0) this.ctx.ui.toast(t('hud.chestSealed'));
       return;
     }
     this.lootEvents.set(key, { phase: 1, wer: vonId });
     this._spawnWave(key, 1, vonId);
-    this.ctx.ui.toast('⚔ Die Truhe erwacht! Welle 1: Wächter greifen an!');
+    this.ctx.ui.toast(t('hud.chestWave1'));
     this.ctx.sounds.fuse();
   }
 
@@ -260,7 +261,7 @@ export class SpecialBlocks {
       if (ev.phase === 1) {
         ev.phase = 2;
         this._spawnWave(key, 2, ev.wer);
-        this.ctx.ui.toast('⚔ Welle 2: MEGA-Zombies! Vorsicht!');
+        this.ctx.ui.toast(t('hud.chestWave2'));
         this.ctx.sounds.explode();
       } else {
         // Ereignis geschafft: Truhe wird zur normalen Truhe voller Beute
@@ -280,7 +281,7 @@ export class SpecialBlocks {
             if (Math.random() < chance) c.slots[freie[i]] = { id, count };
           });
           this._tauscheZuTruhe(x, y, z); // erst füllen, dann tauschen + syncen
-          this.ctx.ui.toast('✨ Die Truhe ist entsiegelt!');
+          this.ctx.ui.toast(t('hud.chestUnsealed'));
           this.ctx.sounds.pickup();
         }
       }

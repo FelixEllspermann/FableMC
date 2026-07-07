@@ -1,6 +1,7 @@
 // Boot + game loop. Assembles the shared ctx and wires all modules together.
 
 import * as THREE from 'three';
+import './names_en.js'; // hängt englische Block-/Item-Namen an (nameOf wählt per Sprache)
 import { Rules, applyRules } from '../config.js';
 import { Sounds } from './sounds.js';
 import { createAtlas, updateAnimatedTiles } from './textures.js';
@@ -296,7 +297,7 @@ async function boot() {
         ctx.survival.restore(ps.survival);
         ctx.inventory.restore(ps.inventory);
         ctx.experience.restore(ps.experience);
-        ui.toast('Willkommen zurück — dein Stand wurde wiederhergestellt. T für Chat');
+        ui.toast(t('hud.welcomeBack'));
       } catch (e) {
         console.warn('Spielerstand unlesbar, frischer Start:', e);
         const s = findSpawn(ctx.seed);
@@ -305,7 +306,7 @@ async function boot() {
     } else {
       const s = findSpawn(ctx.seed);
       ctx.player.respawnAt(s.x, s.y, s.z);
-      ui.toast(`Verbunden — Seed ${ctx.seed}. T für Chat`);
+      ui.toast(t('hud.connected', ctx.seed));
     }
   } else if (saved) {
     ctx.state.mode = saved.mode === 'creative' ? 'creative' : 'survival';

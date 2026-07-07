@@ -1,6 +1,9 @@
 // Canonical shared configuration & data tables. Every module imports from here.
 // Do not duplicate these values elsewhere.
 
+// Sprache für nameOf(): englische Namen kommen aus names_en.js (als .nameEn angehängt).
+import { getLang } from './lang.js';
+
 // ---- World / chunks ----
 export const CHUNK_SIZE = 16;
 export const WORLD_HEIGHT = 512;
@@ -998,8 +1001,10 @@ export function isSaplingId(id) { return !!(id > 0 && BLOCKS[id]?.sapling); }
 
 // Display name for any id (block or item).
 export function nameOf(id) {
-  if (isBlockId(id)) return BLOCKS[id]?.name ?? '?';
-  return ITEMS[id]?.name ?? '?';
+  const def = isBlockId(id) ? BLOCKS[id] : ITEMS[id];
+  if (!def) return '?';
+  // Englisch: .nameEn (aus names_en.js) bevorzugen, sonst deutscher Name als Rückfall.
+  return (getLang() === 'en' && def.nameEn) ? def.nameEn : (def.name ?? '?');
 }
 export function stackSizeOf(id) {
   if (isBlockId(id)) return 64;

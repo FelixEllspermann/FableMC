@@ -4,7 +4,8 @@ import { nameOf, stackSizeOf, BLOCKS, ITEMS, ITEM, BLOCK, SMELT, FUEL } from './
 import { getIconDataURL } from './textures.js';
 import { matchGrid } from './crafting.js';
 import { Keybinds } from './keybinds.js';
-import { rollOptions, canEnchant, ENCHANTS, RARITY_NAME, romanLevel } from './enchant.js';
+import { rollOptions, canEnchant, romanLevel } from './enchant.js';
+import { t } from './lang.js';
 import {
   isEquipment, equipKind, makeInstance, tooltipFor, durabilityLeft, maxDurability, UPGRADE_IDS,
 } from './equip.js';
@@ -648,7 +649,7 @@ export class Inventory {
     if (this.ctx.state.mode !== 'survival') return true; // Kreativ/Spectator: kostenlos
     const xp = this.ctx.experience;
     if (!xp || !xp.canAfford(kosten)) {
-      this.ctx.ui.toast(`Nicht genug XP: ${kosten} Level nötig`);
+      this.ctx.ui.toast(t('hud.notEnoughXp', kosten));
       this.ctx.sounds.denied?.();
       return false;
     }
@@ -664,10 +665,10 @@ export class Inventory {
     const units = Math.ceil(cost / 10);
     const em = this.countItem(ITEM.EMERALD), sa = this.countItem(ITEM.SAPPHIRE);
     if (!xp || !xp.canAfford(cost)) {
-      this.ctx.ui.toast(`Nicht genug XP: ${cost} Level nötig`); this.ctx.sounds.denied?.(); return false;
+      this.ctx.ui.toast(t('hud.notEnoughXp', cost)); this.ctx.sounds.denied?.(); return false;
     }
     if (Math.floor(em / 10) + sa < units) {
-      this.ctx.ui.toast(`Nicht genug Edelsteine: ${units * 10} Smaragde oder ${units} Saphir`);
+      this.ctx.ui.toast(t('hud.notEnoughGems', units * 10, units));
       this.ctx.sounds.denied?.(); return false;
     }
     xp.spendLevels(cost);
@@ -685,7 +686,7 @@ export class Inventory {
     item.ench = item.ench || {};
     item.ench[opt.ench.key] = Math.max(item.ench[opt.ench.key] || 0, opt.ench.level);
     this.ctx.sounds.pickup?.();
-    this.ctx.ui.toast(`${ENCHANTS[opt.ench.key].name} ${romanLevel(opt.ench.level)} verzaubert!`);
+    this.ctx.ui.toast(t('hud.enchanted', t('ench.' + opt.ench.key), romanLevel(opt.ench.level)));
     this._enchOpts = rollOptions(item.id); // neu würfeln für die nächste Verzauberung
     this._renderPanel();
     this._renderHotbar();
@@ -699,11 +700,11 @@ export class Inventory {
     panel.addEventListener('mousedown', (e) => e.stopPropagation());
 
     const h = document.createElement('h3');
-    h.textContent = this.mode === 'anvil' ? 'Amboss' : this.mode === 'enchant' ? 'Verzauberungstisch'
-      : this.mode === 'furnace' ? 'Ofen'
-      : this.mode === 'chest' ? 'Truhe' : this.mode === 'brewing' ? 'Braustand'
-      : this.mode === 'washer' ? 'Washer' : this.mode === 'trade' ? 'Handel'
-      : this.mode === 'backpack' ? 'Rucksack' : 'Handwerk';
+    h.textContent = this.mode === 'anvil' ? t('inv.anvil') : this.mode === 'enchant' ? t('inv.enchant')
+      : this.mode === 'furnace' ? t('inv.furnace')
+      : this.mode === 'chest' ? t('inv.chest') : this.mode === 'brewing' ? t('inv.brewing')
+      : this.mode === 'washer' ? t('inv.washer') : this.mode === 'trade' ? t('inv.trade')
+      : this.mode === 'backpack' ? t('inv.backpack') : t('inv.craft');
     panel.appendChild(h);
 
     const craftRow = document.createElement('div');
@@ -799,8 +800,8 @@ export class Inventory {
       if (item && (item.upgrades || []).length > 0) {
         const clear = document.createElement('button');
         clear.className = 'inv-clear-btn';
-        clear.textContent = 'Slots leeren';
-        clear.title = 'Entfernt alle Upgrades — Materialien gehen verloren';
+        clear.textContent = t('inv.clearSlots');
+        clear.title = t('inv.clearSlotsTip');
         clear.addEventListener('mousedown', (e) => {
           e.stopPropagation();
           item.upgrades = [];
@@ -814,7 +815,7 @@ export class Inventory {
         const hint = document.createElement('div');
         hint.className = 'inv-anvil-hint';
         const lvl = this.ctx.experience?.level ?? 0;
-        hint.innerHTML = `Kosten: Sockel <b>${AMBOSS_KOSTEN_SOCKEL}</b> · Aufwerten <b>${AMBOSS_KOSTEN_UPGRADE}</b> Lvl<br>du hast <b>${lvl}</b> Level`;
+        hint.innerHTML = t('inv.anvilCost', AMBOSS_KOSTEN_SOCKEL, AMBOSS_KOSTEN_UPGRADE, lvl);
         craftRow.appendChild(hint);
       }
     } else if (this.mode === 'enchant') {
@@ -839,7 +840,7 @@ export class Inventory {
       const em = this.countItem(ITEM.EMERALD), sa = this.countItem(ITEM.SAPPHIRE);
       if (!this.enchantItem) {
         const h0 = document.createElement('div'); h0.className = 'inv-anvil-hint';
-        h0.textContent = 'Lege ein Werkzeug, eine Waffe, Rüstung oder einen Rucksack ein.';
+        h0.textContent = t('inv.enchantPrompt');
         box.appendChild(h0);
       }
       (this._enchOpts || []).forEach((opt) => {
@@ -849,11 +850,11 @@ export class Inventory {
         const usable = !!opt.ench && affordX && affordG;
         const row = document.createElement('div');
         row.className = 'inv-ench-opt' + (usable ? '' : ' disabled');
-        const name = opt.ench ? `${ENCHANTS[opt.ench.key].name} ${romanLevel(opt.ench.level)}` : 'keine passende';
+        const name = opt.ench ? `${t('ench.' + opt.ench.key)} ${romanLevel(opt.ench.level)}` : t('inv.enchantNone');
         const nameEl = document.createElement('div'); nameEl.className = 'inv-ench-name';
-        nameEl.textContent = `${RARITY_NAME[opt.rarity]} — ${name}`;
+        nameEl.textContent = `${t('rarity.' + opt.rarity)} — ${name}`;
         const costEl = document.createElement('div'); costEl.className = 'inv-ench-cost';
-        costEl.textContent = `${opt.cost} Level · ${units * 10} Smaragde oder ${units} Saphir`;
+        costEl.textContent = t('inv.enchantCost', opt.cost, units * 10, units);
         row.appendChild(nameEl); row.appendChild(costEl);
         if (usable) row.addEventListener('mousedown', (e) => { e.stopPropagation(); this._applyEnchant(opt); });
         box.appendChild(row);
@@ -861,7 +862,7 @@ export class Inventory {
       craftRow.appendChild(box);
       if (this.ctx.state.mode === 'survival') {
         const hint = document.createElement('div'); hint.className = 'inv-anvil-hint';
-        hint.innerHTML = `Du hast <b>${lvl}</b> Level · <b>${em}</b> Smaragde · <b>${sa}</b> Saphire`;
+        hint.innerHTML = t('inv.enchantHave', lvl, em, sa);
         craftRow.appendChild(hint);
       }
     } else if (this.mode === 'chest') {
@@ -914,7 +915,7 @@ export class Inventory {
       colIn.appendChild(mkSlot('input', (id) => !!SMELT[id]));
       const hint = document.createElement('div');
       hint.className = 'inv-smelt-hint';
-      hint.textContent = '🔥 Brennstoff';
+      hint.textContent = t('inv.fuel');
       colIn.appendChild(hint);
       colIn.appendChild(mkSlot('fuel', (id) => !!FUEL[id]));
       craftRow.appendChild(colIn);
@@ -958,8 +959,8 @@ export class Inventory {
         const hint = document.createElement('div'); hint.className = 'inv-smelt-hint'; hint.textContent = label;
         col.appendChild(hint); col.appendChild(el); return col;
       };
-      craftRow.appendChild(labeled('Flaschen', mkSlot('bottles', (id) => id === ITEM.GLASS_BOTTLE)));
-      craftRow.appendChild(labeled('Wasser', mkSlot('water', (id) => id === ITEM.WATER_BUCKET)));
+      craftRow.appendChild(labeled(t('inv.bottles'), mkSlot('bottles', (id) => id === ITEM.GLASS_BOTTLE)));
+      craftRow.appendChild(labeled(t('inv.water'), mkSlot('water', (id) => id === ITEM.WATER_BUCKET)));
       const mid = document.createElement('div'); mid.className = 'inv-smelt-col';
       const arrow = document.createElement('div'); arrow.className = 'inv-arrow'; arrow.textContent = '⚗';
       mid.appendChild(arrow);
@@ -968,8 +969,8 @@ export class Inventory {
       bar.appendChild(fill); mid.appendChild(bar);
       craftRow.appendChild(mid);
       const ingFilter = (id) => id === ITEM.CRIMSON_BLOOD || id === BLOCK.VINE || id === ITEM.SUGAR || id === ITEM.KELP;
-      craftRow.appendChild(labeled('Zutat', mkSlot('ing1', ingFilter)));
-      craftRow.appendChild(labeled('Zutat', mkSlot('ing2', ingFilter)));
+      craftRow.appendChild(labeled(t('inv.ingredient'), mkSlot('ing1', ingFilter)));
+      craftRow.appendChild(labeled(t('inv.ingredient'), mkSlot('ing2', ingFilter)));
     } else if (this.mode === 'washer') {
       // Washer: Dirty Flux | Wasser | 💧 Fortschritt | Ausgabe (Flux-Staub, nur entnehmen)
       const wa = this.wash;
@@ -985,7 +986,7 @@ export class Inventory {
         col.appendChild(hint); col.appendChild(el); return col;
       };
       craftRow.appendChild(labeled('Dirty Flux', mkSlot('input', (id) => id === ITEM.DIRTY_FLUX)));
-      craftRow.appendChild(labeled('Wasser', mkSlot('water', (id) => id === ITEM.WATER_BUCKET)));
+      craftRow.appendChild(labeled(t('inv.water'), mkSlot('water', (id) => id === ITEM.WATER_BUCKET)));
       const mid = document.createElement('div'); mid.className = 'inv-smelt-col';
       const arrow = document.createElement('div'); arrow.className = 'inv-arrow'; arrow.textContent = '💧';
       mid.appendChild(arrow);
@@ -993,7 +994,7 @@ export class Inventory {
       const fill = document.createElement('div'); fill.style.width = (wa.progress / 3 * 100).toFixed(0) + '%';
       bar.appendChild(fill); mid.appendChild(bar);
       craftRow.appendChild(mid);
-      craftRow.appendChild(labeled('Flux-Staub', this._slotEl(wa.output, () => {
+      craftRow.appendChild(labeled(t('inv.fluxDust'), this._slotEl(wa.output, () => {
         if (!wa.output) return;
         if (!this.cursor) { this.cursor = wa.output; wa.output = null; }
         else if (this.cursor.id === wa.output.id && this.cursor.count + wa.output.count <= stackSizeOf(wa.output.id)) {
@@ -1012,8 +1013,8 @@ export class Inventory {
       const info = document.createElement('div');
       info.className = 'inv-trade-info';
       const nextIn = level < pool.length ? PER - ((v.tradeXp || 0) % PER) : 0;
-      info.textContent = `Level ${level} — ${level}/${pool.length} Angebote frei`
-        + (nextIn ? ` · noch ${nextIn} Handel${nextIn > 1 ? '' : ''} bis zum nächsten Slot` : ' · voll ausgebaut');
+      info.textContent = t('inv.tradeInfo', level, level, pool.length)
+        + (nextIn ? t('inv.tradeNext', nextIn) : t('inv.tradeFull'));
       list.appendChild(info);
       pool.forEach((tr, i) => {
         const unlocked = i < level;
@@ -1052,7 +1053,7 @@ export class Inventory {
     // Kreativ-Palette: jeden Block / jedes Item direkt nehmen
     if (this.ctx.state.mode === 'creative') {
       const hc = document.createElement('h3');
-      hc.textContent = 'Alle Blöcke & Items (Klick = Stapel, Rechtsklick = einzeln)';
+      hc.textContent = t('inv.creativeAll');
       panel.appendChild(hc);
       const pal = document.createElement('div');
       pal.className = 'inv-palette';
@@ -1078,7 +1079,7 @@ export class Inventory {
     }
 
     const h2 = document.createElement('h3');
-    h2.textContent = 'Inventar';
+    h2.textContent = t('inv.inventory');
     panel.appendChild(h2);
 
     const main = document.createElement('div');

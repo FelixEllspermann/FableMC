@@ -2,6 +2,7 @@
 
 import { PLAYER, isWaterId, ITEMS, nameOf, BLOCKS, BLOCK } from './constants.js';
 import { findSpawn } from './worldgen.js';
+import { t } from './lang.js';
 import { equipStats, damageItem, armorStats } from './equip.js';
 import { Rules } from '../config.js';
 
@@ -162,7 +163,7 @@ export class Survival {
         const p = armor[k];
         if (p && damageItem(p, 1)) {
           armor[k] = null;
-          this.ctx.ui.toast(nameOf(p.id) + ' ist zerbrochen!');
+          this.ctx.ui.toast(t('hud.broke', nameOf(p.id)));
         }
       }
     }

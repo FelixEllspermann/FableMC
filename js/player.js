@@ -1,6 +1,7 @@
 // First-person player: pointer-lock look, movement, mining, placing, attacking, eating.
 
 import * as THREE from 'three';
+import { t } from './lang.js';
 import {
   WALK_SPEED, SPRINT_SPEED, SNEAK_SPEED, JUMP_SPEED, SWIM_UP_SPEED, REACH, PLAYER,
   BLOCK, BLOCKS, ITEM, ITEMS, isBlockId, isLiquid, ATTACK_COOLDOWN, nameOf,
@@ -171,14 +172,14 @@ export class Player {
             !s.spectator && this.playable && now - this.lastSpace < 300) {
           this.flying = !this.flying;
           this.vel.y = 0;
-          this.ctx.ui.toast(this.flying ? 'Fliegen an' : 'Fliegen aus');
+          this.ctx.ui.toast(this.flying ? t('hud.flyOn') : t('hud.flyOff'));
         }
         this.lastSpace = now;
       }
       if (e.code === 'F4' && s.mode === 'creative' && s.gameStarted && !s.dead) {
         s.spectator = !s.spectator;
         if (s.spectator) this.flying = true;
-        this.ctx.ui.toast(s.spectator ? 'Spectator an (durch Blöcke fliegen)' : 'Spectator aus');
+        this.ctx.ui.toast(s.spectator ? t('hud.spectatorOn') : t('hud.spectatorOff'));
       }
       if (e.code === 'KeyB' && s.mode === 'creative' && this.playable) {
         this.ctx.ui.showBiomeMenu();
@@ -394,7 +395,7 @@ export class Player {
     if (!s || !isEquipment(s.id)) return;
     if (damageItem(s, n)) {
       this.ctx.inventory.slots[this.ctx.inventory.hotbarIndex] = null;
-      this.ctx.ui.toast(nameOf(s.id) + ' ist zerbrochen!');
+      this.ctx.ui.toast(t('hud.broke', nameOf(s.id)));
       this.ctx.sounds.hurt();
     }
     this.ctx.inventory._renderAll();
@@ -534,9 +535,9 @@ export class Player {
   activateScroll(art) {
     this.effects[art] = 300;
     const NAMEN = {
-      mining: '⛏ Schürfblick: Erze leuchten 5 Minuten durch das Gestein!',
-      water: '🌊 Wasseratmung: 5 Minuten Luft unter Wasser!',
-      levitation: '🕊 Levitation: 5 Minuten fliegen (2× Leertaste)!',
+      mining: t('hud.fxMining'),
+      water: t('hud.fxWater'),
+      levitation: t('hud.fxLevitation'),
     };
     if (art === 'levitation') this.flying = true;
     this.ctx.ui.toast(NAMEN[art]);
@@ -556,7 +557,7 @@ export class Player {
       if (fx[k] <= 0) {
         fx[k] = 0;
         if (k === 'levitation' && this.ctx.state.mode !== 'creative') this.flying = false;
-        this.ctx.ui.toast('Die Zauberwirkung verfliegt …');
+        this.ctx.ui.toast(t('hud.spellFades'));
       }
     }
     // Erz-Umrisse: während des Schürfblicks jede Sekunde neu einsammeln
@@ -824,9 +825,9 @@ export class Player {
           this.ctx.state.time = (day + 1) * L + Rules.startFraction * L;
           this.ctx.net?.sendTime(this.ctx.state.time); // Morgen für alle Mitspieler
         });
-        this.ctx.ui.toast('Spawnpunkt gesetzt');
+        this.ctx.ui.toast(t('hud.spawnSet'));
       } else {
-        this.ctx.ui.toast('Spawnpunkt gesetzt — schlafen geht nur nachts');
+        this.ctx.ui.toast(t('hud.spawnSetNight'));
       }
       this.rightHeld = false;
       return;
