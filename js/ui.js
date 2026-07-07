@@ -1133,26 +1133,27 @@ export class UI {
     const flora = this.ctx.flora;
     const blocks = this.ctx.blocks;
 
+    const loc = getLang() === 'en' ? 'en-US' : 'de-DE'; // Tausendertrennung je Sprache
     this.debugR.textContent =
       `— Engine —\n` +
-      `Chunks: ${world.chunkCount} geladen · ${mitDaten} generiert · ${meshed} gemesht\n` +
+      `Chunks: ${world.chunkCount} ${t('dbg.loaded')} · ${mitDaten} ${t('dbg.generated')} · ${meshed} ${t('dbg.meshed')}\n` +
       `  dirty ${dirty} · relight ${lightDirty} · Gen-Queue ${world._pending?.size ?? 0} · Mesh-Queue ${world._meshResults?.size ?? 0}\n` +
       `Worker: ${world._workers?.length ?? 0}\n` +
-      `Draw-Calls: ${this.ctx.renderStats?.calls ?? '—'} · Dreiecke: ${(this.ctx.renderStats?.triangles ?? 0).toLocaleString('de-DE')}\n` +
-      `GPU-Speicher: ${info?.memory.geometries ?? '—'} Geometrien · ${info?.memory.textures ?? '—'} Texturen\n` +
+      `Draw-Calls: ${this.ctx.renderStats?.calls ?? '—'} · ${t('dbg.triangles')}: ${(this.ctx.renderStats?.triangles ?? 0).toLocaleString(loc)}\n` +
+      `${t('dbg.gpuMem')}: ${info?.memory.geometries ?? '—'} ${t('dbg.geometries')} · ${info?.memory.textures ?? '—'} ${t('dbg.textures')}\n` +
       `JS-Heap: ${heap}\n` +
       `\n` +
       `Entities: ${entities.count}\n` +
       `  ${typZeile}\n` +
-      `Partikel: ${this.ctx.furnaces?.particles.length ?? 0}\n` +
-      `Öfen: ${this.ctx.furnaces?.map.size ?? 0} · Truhen: ${blocks?.chests.size ?? 0} · Events: ${blocks?.lootEvents.size ?? 0}\n` +
+      `${t('dbg.particles')}: ${this.ctx.furnaces?.particles.length ?? 0}\n` +
+      `${t('dbg.furnaces')}: ${this.ctx.furnaces?.map.size ?? 0} · ${t('dbg.chests2')}: ${blocks?.chests.size ?? 0} · Events: ${blocks?.lootEvents.size ?? 0}\n` +
       `\n` +
-      `Fluid-Sim: Wasser ${fluids?.queueW.size ?? 0} · Lava ${fluids?.queueL.size ?? 0} Zellen\n` +
-      `  Gischt ${fluids?._gischtZellen?.length ?? 0} · Funken ${fluids?._funkenZellen?.length ?? 0}\n` +
-      `Flora: Laub-Queue ${flora?.decayQueue.size ?? 0} · Setzlinge ${flora?.saplings.size ?? 0} · Kristalle ${flora?._kristalle?.length ?? 0}\n` +
+      `Fluid-Sim: ${t('dbg.water')} ${fluids?.queueW.size ?? 0} · Lava ${fluids?.queueL.size ?? 0} ${t('dbg.cells')}\n` +
+      `  ${t('dbg.spray')} ${fluids?._gischtZellen?.length ?? 0} · ${t('dbg.sparks')} ${fluids?._funkenZellen?.length ?? 0}\n` +
+      `Flora: ${t('dbg.leafQueue')} ${flora?.decayQueue.size ?? 0} · ${t('dbg.saplings')} ${flora?.saplings.size ?? 0} · ${t('dbg.crystals')} ${flora?._kristalle?.length ?? 0}\n` +
       `\n` +
-      `Welt-Edits: ${editZellen.toLocaleString('de-DE')} Blöcke in ${editChunks} Chunks\n` +
-      `Spielstand: ${saveKB}`;
+      `${t('dbg.worldEdits')}: ${editZellen.toLocaleString(loc)} ${t('dbg.blocks')} in ${editChunks} Chunks\n` +
+      `${t('dbg.save')}: ${saveKB}`;
   }
 }
 
