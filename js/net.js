@@ -10,6 +10,11 @@ import { Keybinds } from './keybinds.js';
 import { BLOCK, ITEM, BLOCKS, ITEMS } from './constants.js';
 import { getSession } from './auth.js';
 import { t } from './lang.js';
+import { SnapshotBuffer } from './interp.js';
+
+// Render-Verzögerung für fremde Avatare (ms). Positionen kommen 20×/s → 100 ms puffert
+// ~2 Pakete + Jitter ab und macht die Bewegung trotz Ping ruckelfrei.
+const INTERP_AVATAR = 100;
 
 const CHAT_STYLE = `
 .mp-chatlog {
@@ -393,7 +398,7 @@ export class Net {
       case 'move': {
         const r = this.remote.get(m.id);
         if (r) {
-          r.ziel = { x: m.x, y: m.y, z: m.z, yaw: m.yaw };
+          r.buf.push(m.st ?? performance.now(), m.x, m.y, m.z, m.yaw); // in den Interpolations-Puffer (Sender-Zeit)
           if (m.held !== undefined) this._setHeld(r, m.held);
         }
         break;
@@ -425,7 +430,7 @@ export class Net {
         break;
       }
       case 'ents': // Snapshot des Hosts → Mobs nachziehen
-        if (!this.isHost) ctx.entities?.applyRemoteSnapshot(m.list || []);
+        if (!this.isHost) ctx.entities?.applyRemoteSnapshot(m.list || [], m.st);
         break;
       case 'idrop': // Mitspieler hat ein Item gedroppt → lokal zeigen
         ctx.entities?.spawnRemoteItem(m.netId, m.x, m.y, m.z, m.id, m.count || 1);
@@ -601,11 +606,11 @@ export class Net {
     g.position.set(start.x, start.y, start.z);
     this.ctx.scene.add(g);
     const rec = {
-      name, mesh: g, ziel: start, materials: [skin, shirt, hose], label,
+      name, mesh: g, buf: new SnapshotBuffer(INTERP_AVATAR), materials: [skin, shirt, hose], label,
       legs: [legL, legR], arms: [armL, armR], armR,
       walkPhase: 0, swing: 0, held: 0, heldMesh: null, flash: 0, dead: 0,
     };
-    this.remote.set(id, rec);
+    this.remote.set(id, rec); // Puffer füllt sich aus 'move'; bis dahin bleibt der Avatar an start
     if (pos && pos.held) this._setHeld(rec, pos.held);
   }
 
@@ -645,21 +650,22 @@ export class Net {
     // eigene Position ~10×/s senden
     this._moveTimer -= dt;
     if (this._moveTimer <= 0) {
-      this._moveTimer = 0.1;
+      this._moveTimer = 0.05; // 20×/s senden → mehr Stützpunkte für die Interpolation
       const p = this.ctx.player;
       this._send({
         type: 'move',
         x: +p.pos.x.toFixed(2), y: +p.pos.y.toFixed(2), z: +p.pos.z.toFixed(2),
         yaw: +p.yaw.toFixed(2), pitch: +p.pitch.toFixed(2),
         held: this.ctx.inventory?.selectedItem?.()?.id || 0, // gehaltenes Item für die Hand
+        st: Math.round(performance.now()), // Sender-Zeitstempel für die Interpolation
       });
     }
     // Host: Mob-Snapshot ~8×/s an alle Gäste (nur wenn jemand zuschaut)
     if (this.isHost && this.remote.size > 0) {
       this._entsTimer -= dt;
       if (this._entsTimer <= 0) {
-        this._entsTimer = 0.125;
-        this._send({ type: 'ents', list: this.ctx.entities?.collectSnapshot() || [] });
+        this._entsTimer = 0.1; // 10×/s Mob-Snapshots → passt zum Interpolations-Puffer
+        this._send({ type: 'ents', list: this.ctx.entities?.collectSnapshot() || [], st: Math.round(performance.now()) });
       }
     }
     // Spielstand alle 10 s auf dem Server sichern (Items, Position, Leben)
@@ -668,15 +674,16 @@ export class Net {
       this._pstateTimer = 10;
       this._sendePstate();
     }
-    // Avatare weich zum Ziel bewegen + animieren
+    // Avatare aus dem Interpolations-Puffer bewegen (ruckelfrei trotz Ping) + animieren
+    const dtMs = dt * 1000;
     for (const r of this.remote.values()) {
       const m = r.mesh;
-      const k = Math.min(1, dt * 12);
       const px = m.position.x, pz = m.position.z;
-      m.position.x += (r.ziel.x - m.position.x) * k;
-      m.position.y += (r.ziel.y - m.position.y) * k;
-      m.position.z += (r.ziel.z - m.position.z) * k;
-      if (r.dead <= 0) m.rotation.y += (r.ziel.yaw - m.rotation.y) * k;
+      const s = r.buf.advance(dtMs);
+      if (s) {
+        m.position.set(s.x, s.y, s.z);
+        if (r.dead <= 0) m.rotation.y = s.yaw;
+      }
 
       // Laufanimation aus der tatsächlichen Bewegung ableiten
       const speed = Math.hypot(m.position.x - px, m.position.z - pz) / Math.max(dt, 1e-4);

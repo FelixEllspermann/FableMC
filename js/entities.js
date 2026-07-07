@@ -7,10 +7,14 @@ import {
 } from './constants.js';
 import { stepEntity } from './physics.js';
 import { armorStats } from './equip.js';
+import { SnapshotBuffer } from './interp.js';
 import { biomeAt, villagesNear } from './worldgen.js';
 import { Rules } from '../config.js';
 
 const SLIME_CAP = 5; // max. Schleime pro Spieler-Umkreis
+// Render-Verzögerung für ferngesteuerte Mobs (ms): Host schickt ~10×/s → 150 ms puffern
+// Intervall + Jitter ab und interpolieren dazwischen → flüssige Mobs statt Geruckel.
+const INTERP_MOB = 150;
 
 // ---- Zucht (Breeding) ----
 const TRADES_PER_LEVEL = 2; // erfolgreiche Trades pro Handelslevel (schaltet je 1 Slot frei)
@@ -1114,8 +1118,9 @@ export class EntityManager {
   }
 
   // Gast: Snapshot des Hosts anwenden (spawnen/bewegen/entfernen)
-  applyRemoteSnapshot(list) {
+  applyRemoteSnapshot(list, st) {
     const gesehen = new Set();
+    const now = st ?? performance.now(); // Sender-Zeit (Host-Uhr) für die Interpolation
     for (const s of list) {
       gesehen.add(s.eid);
       let e = this._remoteMap.get(s.eid);
@@ -1124,7 +1129,7 @@ export class EntityManager {
         if (!e) continue;
         this._remoteMap.set(s.eid, e);
       }
-      e.netTarget = { x: s.x, y: s.y, z: s.z, yaw: s.yaw || 0 };
+      e.buf.push(now, s.x, s.y, s.z, s.yaw || 0); // in den Interpolations-Puffer
       if (s.hp < e.health && e.materials) { // Treffer-Feedback
         e.flash = 0.18;
         for (const m of e.materials) { m.emissive.setHex(0xff0000); m.emissiveIntensity = 0.55; }
@@ -1189,6 +1194,7 @@ export class EntityManager {
     }
     e.remoteNet = true;
     e.eid = s.eid;
+    e.buf = new SnapshotBuffer(INTERP_MOB); // Positions-Puffer für ruckelfreie Interpolation
     return e;
   }
 
@@ -1552,13 +1558,13 @@ export class EntityManager {
           if (e.dying <= 0) this._removeEntity(e); // ohne Drops — die sendet der Host
           continue;
         }
-        if (e.netTarget) {
-          const k = Math.min(1, dt * 12);
+        {
+          const snap = e.buf ? e.buf.advance(dt * 1000) : null;
           const altX = e.pos.x, altZ = e.pos.z;
-          e.pos.x += (e.netTarget.x - e.pos.x) * k;
-          e.pos.y += (e.netTarget.y - e.pos.y) * k;
-          e.pos.z += (e.netTarget.z - e.pos.z) * k;
-          e.yaw = (e.yaw ?? 0) + ((e.netTarget.yaw - (e.yaw ?? 0)) * k);
+          if (snap) {
+            e.pos.set(snap.x, snap.y, snap.z);
+            e.yaw = snap.yaw;
+          }
           const tempo = Math.hypot(e.pos.x - altX, e.pos.z - altZ) / Math.max(dt, 1e-4);
           e.animPhase = (e.animPhase || 0) + dt * tempo * 3.5;
           if (e.legs) {
